@@ -12,6 +12,8 @@ var Car = function(x, y, canvasWidth, canvasHeight, hexSize, phase) {
     this.canvasHeight = canvasHeight;
     this.phase = phase || 1;
     this.stuck = false;
+    this.birthTime = Date.now(); // Track when this car was born
+    this.hueOffset = Math.random() * 360; // Each car gets unique base hue
     this.color = this.getColor();
 
     // Each car picks a movement strategy at birth
@@ -43,15 +45,21 @@ Car.prototype.getColor = function() {
     var xRatio = Math.max(0, Math.min(1, this.x / this.canvasWidth));
     var yRatio = Math.max(0, Math.min(1, this.y / this.canvasHeight));
 
-    // Add time-based color cycling (cycles every 10 seconds)
-    var timeCycle = (Date.now() % 10000) / 10000; // 0 to 1 over 10 seconds
-    var timeHueShift = Math.sin(timeCycle * Math.PI * 2) * 30; // ±30° shift
+    // Global time-based cycling (all cars see same global time)
+    var globalTime = (Date.now() % 10000) / 10000; // 0 to 1 over 10 seconds
+    var globalHueShift = Math.sin(globalTime * Math.PI * 2) * 20; // ±20° global shift
 
-    // Purple to magenta gradient with time variation - ULTRA STRONG
-    var baseHue = 270 + (xRatio * 60); // purple (270°) to magenta (330°)
-    var hue = baseHue + timeHueShift; // Add time-based oscillation
-    var sat = 85 + yRatio * 15 + Math.cos(timeCycle * Math.PI * 2) * 5; // 80-100% with time variation
-    var light = 45 + yRatio * 10 + Math.sin(timeCycle * Math.PI * 4) * 5; // 40-60% with faster time variation
+    // Car's individual lifetime (creates unique color per car based on birth time)
+    var lifetime = (Date.now() - this.birthTime) / 1000; // seconds since birth
+    var lifetimeHueShift = Math.sin(lifetime * 0.5) * 15; // ±15° based on car age
+
+    // Each car has unique base hue + position variation + time variations
+    var baseHue = this.hueOffset + (xRatio * 60); // Car's unique hue + position gradient
+    var hue = (baseHue + globalHueShift + lifetimeHueShift) % 360; // Combined time effects
+
+    // Saturation and lightness with time variations
+    var sat = 85 + yRatio * 15 + Math.cos(globalTime * Math.PI * 2) * 5; // 80-100%
+    var light = 45 + yRatio * 10 + Math.sin(globalTime * Math.PI * 4) * 5; // 40-60%
 
     return 'hsla(' + ~~hue + ', ' + ~~sat + '%, ' + ~~light + '%, 1)';
 };
