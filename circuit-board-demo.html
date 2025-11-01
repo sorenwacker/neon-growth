@@ -173,6 +173,14 @@
             <input type="range" id="spawn-delay" min="100" max="2000" value="500" step="100">
         </div>
 
+        <div class="control-group">
+            <label>
+                Mutation Rate (%)
+                <span class="value" id="mutation-rate-value">10</span>
+            </label>
+            <input type="range" id="mutation-rate" min="0" max="50" value="10" step="5">
+        </div>
+
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
             <h4 style="font-size: 12px; margin-bottom: 10px; color: #666;">Presets</h4>
             <button id="preset-sparse" style="margin-bottom: 5px;">Sparse (5 cars, 100px)</button>
@@ -182,12 +190,6 @@
         <button id="reset">Reset Animation</button>
     </div>
 
-    <div class="stats">
-        <div>Active Cars: <strong id="car-count">0</strong></div>
-        <div>Occupied Cells: <strong id="cell-count">0</strong></div>
-        <div>Grid: <strong id="grid-size">0x0</strong></div>
-        <div>FPS: <strong id="fps">0</strong></div>
-    </div>
 
     <script src="js/circuit-board.js"></script>
 
@@ -202,6 +204,7 @@
         const widthSlider = document.getElementById('width');
         const delaySlider = document.getElementById('delay');
         const spawnDelaySlider = document.getElementById('spawn-delay');
+        const mutationRateSlider = document.getElementById('mutation-rate');
         const resetBtn = document.getElementById('reset');
 
         gridSlider.addEventListener('input', function() {
@@ -216,7 +219,8 @@
                         traceLifetime: parseFloat(traceLifetimeSlider.value),
                         lineWidth: parseFloat(widthSlider.value),
                         stepDelay: parseInt(delaySlider.value),
-                        spawnDelay: parseInt(spawnDelaySlider.value)
+                        spawnDelay: parseInt(spawnDelaySlider.value),
+                        mutationRate: parseInt(mutationRateSlider.value) / 100
                     });
                     window.circuitBoardInstance.theme = 'light';
                 }, 100);
@@ -261,6 +265,13 @@
             document.getElementById('spawn-delay-value').textContent = this.value;
             if (window.circuitBoardInstance) {
                 window.circuitBoardInstance.spawnDelay = parseInt(this.value);
+            }
+        });
+
+        mutationRateSlider.addEventListener('input', function() {
+            document.getElementById('mutation-rate-value').textContent = this.value;
+            if (window.circuitBoardInstance) {
+                window.circuitBoardInstance.mutationRate = parseInt(this.value) / 100; // Convert % to decimal
             }
         });
 
@@ -337,34 +348,6 @@
             }
         });
 
-        // Stats update
-        let frameCount = 0;
-        let lastTime = performance.now();
-
-        function updateStats() {
-            if (window.circuitBoardInstance) {
-                document.getElementById('car-count').textContent =
-                    window.circuitBoardInstance.cars.length;
-
-                document.getElementById('cell-count').textContent =
-                    Object.keys(window.circuitBoardInstance.occupiedCells).length;
-
-                document.getElementById('grid-size').textContent =
-                    window.circuitBoardInstance.hexSize + 'px hex';
-
-                // Calculate FPS
-                frameCount++;
-                const currentTime = performance.now();
-                if (currentTime - lastTime >= 1000) {
-                    document.getElementById('fps').textContent = frameCount;
-                    frameCount = 0;
-                    lastTime = currentTime;
-                }
-            }
-            requestAnimationFrame(updateStats);
-        }
-
-        updateStats();
     </script>
 </body>
 </html>

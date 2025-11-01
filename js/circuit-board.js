@@ -16,6 +16,10 @@ var Car = function(x, y, canvasWidth, canvasHeight, hexSize, phase, strategy) {
     this.hueOffset = Math.random() * 360; // Each car gets unique base hue
     this.color = this.getColor();
 
+    // Fitness tracking
+    this.distanceTraveled = 0; // Total distance moved
+    this.cellsVisited = 0; // Number of unique cells visited
+
     // Strategy can be passed in (fitness-based) or random (fallback)
     if (strategy) {
         this.strategy = strategy;
@@ -167,11 +171,14 @@ var CircuitBoard = function(options) {
 
     // Strategy fitness tracking - survival of the fittest
     this.strategyFitness = {
-        'wall-follower': { totalLifetime: 0, count: 0 },
-        'wanderer': { totalLifetime: 0, count: 0 },
-        'explorer': { totalLifetime: 0, count: 0 },
-        'spiral': { totalLifetime: 0, count: 0 }
+        'wall-follower': { totalLifetime: 0, count: 0, totalDistance: 0, totalCells: 0 },
+        'wanderer': { totalLifetime: 0, count: 0, totalDistance: 0, totalCells: 0 },
+        'explorer': { totalLifetime: 0, count: 0, totalDistance: 0, totalCells: 0 },
+        'spiral': { totalLifetime: 0, count: 0, totalDistance: 0, totalCells: 0 }
     };
+
+    // Evolution parameters
+    this.mutationRate = options.mutationRate !== undefined ? options.mutationRate : 0.1; // 10% chance of random strategy
 
     // Trace lifetime in seconds - controls both fading and cell recycling
     this.traceLifetime = options.traceLifetime !== undefined ? options.traceLifetime : 2.0; // Default 2 seconds
@@ -271,8 +278,14 @@ CircuitBoard.prototype.createObstacles = function() {
 };
 
 CircuitBoard.prototype.selectStrategyByFitness = function() {
-    // Calculate average lifetime for each strategy
     var strategies = ['wall-follower', 'wanderer', 'explorer', 'spiral'];
+
+    // MUTATION: Random strategy with probability = mutationRate
+    if (Math.random() < this.mutationRate) {
+        return strategies[Math.floor(Math.random() * strategies.length)];
+    }
+
+    // Calculate fitness-based weights using multiple metrics
     var weights = [];
     var totalWeight = 0;
 
@@ -280,13 +293,21 @@ CircuitBoard.prototype.selectStrategyByFitness = function() {
         var strategy = strategies[i];
         var fitness = this.strategyFitness[strategy];
 
-        // Average lifetime is the fitness score (more lifetime = better strategy)
-        var avgLifetime = fitness.count > 0 ? fitness.totalLifetime / fitness.count : 1.0;
+        if (fitness.count > 0) {
+            // Combined fitness: lifetime + distance + cells visited
+            var avgLifetime = fitness.totalLifetime / fitness.count;
+            var avgDistance = fitness.totalDistance / fitness.count;
+            var avgCells = fitness.totalCells / fitness.count;
 
-        // Weight is proportional to average lifetime (squared for stronger selection pressure)
-        var weight = Math.pow(avgLifetime, 2);
-        weights.push(weight);
-        totalWeight += weight;
+            // Weighted combination: prioritize cells visited and lifetime
+            var combinedFitness = (avgCells * 2) + avgLifetime + (avgDistance / 100);
+            var weight = Math.pow(combinedFitness, 2); // Squared for stronger selection
+            weights.push(weight);
+            totalWeight += weight;
+        } else {
+            weights.push(1.0); // No data yet
+            totalWeight += 1.0;
+        }
     }
 
     // If no data yet, use equal weights
@@ -581,10 +602,12 @@ CircuitBoard.prototype.draw = function() {
                 this.ctx.arc(car.x, car.y, this.lineWidth / 2, 0, Math.PI * 2);
                 this.ctx.fill();
 
-                // Record fitness: how long did this car survive?
+                // Record fitness: lifetime, distance, and cells visited
                 var lifetime = (Date.now() - car.birthTime) / 1000; // seconds
                 if (this.strategyFitness[car.strategy]) {
                     this.strategyFitness[car.strategy].totalLifetime += lifetime;
+                    this.strategyFitness[car.strategy].totalDistance += car.distanceTraveled;
+                    this.strategyFitness[car.strategy].totalCells += car.cellsVisited;
                     this.strategyFitness[car.strategy].count += 1;
                 }
 
@@ -748,6 +771,11 @@ CircuitBoard.prototype.executeMove = function(car, move) {
     car.x = snappedX;
     car.y = snappedY;
     car.previousDirection = car.currentDirection; // Track where we came from
+
+    // Update fitness metrics
+    var distance = Math.sqrt(Math.pow(snappedX - oldX, 2) + Math.pow(snappedY - oldY, 2));
+    car.distanceTraveled += distance;
+    car.cellsVisited += 1; // Each move is to a new unique cell
 
     // Check if car turned opposite to its preference - if so, switch preference
     var turnAngle = (move.direction - car.currentDirection + 6) % 6;
