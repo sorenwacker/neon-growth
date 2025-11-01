@@ -232,7 +232,7 @@ CircuitBoard.prototype.setup = function() {
         opacity: ${this.theme === 'light' ? '0.35' : '0'};
         display: block;
         transition: opacity 1.5s ease;
-        background: rgba(240, 249, 255, 0.95);
+        background: black;
     `;
 
     document.body.insertBefore(this.canvas, document.body.firstChild);
@@ -324,8 +324,8 @@ CircuitBoard.prototype.spawnCar = function() {
         }
     }
 
-    // Truly no free spots left - animation is complete
-    this.animationComplete = true;
+    // No free spots left - just return, cells will be recycled
+    return;
 };
 
 CircuitBoard.prototype.onResize = function() {
@@ -411,7 +411,7 @@ CircuitBoard.prototype.draw = function() {
 
     // Fade effect for trace trails (only if fadeAlpha > 0)
     if (this.fadeAlpha > 0) {
-        this.ctx.fillStyle = 'rgba(240, 249, 255, ' + this.fadeAlpha + ')';
+        this.ctx.fillStyle = 'rgba(0, 0, 0, ' + this.fadeAlpha + ')';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         // Clear faded cells so they can be reused
@@ -523,14 +523,15 @@ CircuitBoard.prototype.draw = function() {
 
                 // Remove stuck car and spawn new one
                 this.cars.splice(i, 1);
-                if (this.cars.length < this.maxCars && !this.animationComplete) {
+                // Always spawn - animation never stops
+                if (this.cars.length < this.maxCars) {
                     this.spawnCar();
                 }
             }
         }
 
-        // Aggressively spawn new cars to fill all gaps - always try to maintain max cars
-        if (this.cars.length < this.maxCars && !this.animationComplete) {
+        // Aggressively spawn new cars to fill all gaps - animation never stops
+        if (this.cars.length < this.maxCars) {
             this.spawnCar();
         }
     }
