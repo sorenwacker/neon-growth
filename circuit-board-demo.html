@@ -136,9 +136,9 @@
         <div class="control-group">
             <label>
                 Max Cars
-                <span class="value" id="cars-value">5</span>
+                <span class="value" id="cars-value">30</span>
             </label>
-            <input type="range" id="cars" min="1" max="10" value="5" step="1">
+            <input type="range" id="cars" min="1" max="50" value="30" step="1">
         </div>
 
         <div class="control-group">
@@ -347,6 +347,18 @@
                 toggleBtn.textContent = 'Show UI';
             }
         });
+
+        // Initialize animation on load
+        window.circuitBoardInstance = new CircuitBoard({
+            hexSize: parseInt(gridSlider.value),
+            maxCars: parseInt(carsSlider.value),
+            traceLifetime: parseFloat(traceLifetimeSlider.value),
+            lineWidth: parseFloat(widthSlider.value),
+            stepDelay: parseInt(delaySlider.value),
+            spawnDelay: parseInt(spawnDelaySlider.value),
+            mutationRate: parseInt(mutationRateSlider.value) / 100
+        });
+        window.circuitBoardInstance.theme = 'light';
 
     </script>
 </body>
