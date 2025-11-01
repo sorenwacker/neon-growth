@@ -38,10 +38,15 @@ Car.prototype.getColor = function() {
     var xRatio = Math.max(0, Math.min(1, this.x / this.canvasWidth));
     var yRatio = Math.max(0, Math.min(1, this.y / this.canvasHeight));
 
-    // Purple to magenta gradient - ULTRA STRONG
-    var hue = 270 + (xRatio * 60); // purple (270°) to magenta (330°)
-    var sat = 85 + yRatio * 15; // 85-100% - maximum saturation
-    var light = 45 + yRatio * 10; // 45-55% - deep, intense colors
+    // Add time-based color cycling (cycles every 10 seconds)
+    var timeCycle = (Date.now() % 10000) / 10000; // 0 to 1 over 10 seconds
+    var timeHueShift = Math.sin(timeCycle * Math.PI * 2) * 30; // ±30° shift
+
+    // Purple to magenta gradient with time variation - ULTRA STRONG
+    var baseHue = 270 + (xRatio * 60); // purple (270°) to magenta (330°)
+    var hue = baseHue + timeHueShift; // Add time-based oscillation
+    var sat = 85 + yRatio * 15 + Math.cos(timeCycle * Math.PI * 2) * 5; // 80-100% with time variation
+    var light = 45 + yRatio * 10 + Math.sin(timeCycle * Math.PI * 4) * 5; // 40-60% with faster time variation
 
     return 'hsla(' + ~~hue + ', ' + ~~sat + '%, ' + ~~light + '%, 1)';
 };
@@ -143,7 +148,7 @@ var CircuitBoard = function(options) {
     this.cars = []; // Active cars
     this.maxCars = options.maxCars || 2; // Maximum simultaneous cars
     this.fadeAlpha = options.fadeAlpha !== undefined ? options.fadeAlpha : 0.02; // Default fade enabled
-    this.fadeTime = options.fadeTime || 5000; // Time before cells are cleared (ms)
+    this.fadeTime = options.fadeTime || 1500; // Time before cells are cleared (ms) - shorter for continuous animation
     this.lineWidth = options.lineWidth || 120; // Line width - thicker than grid, overlapping
     this.drawCounter = 0;
     this.animationId = null;
@@ -262,7 +267,7 @@ CircuitBoard.prototype.spawnCar = function() {
             this.ctx.fill();
 
             this.cars.push(car);
-            return;
+            return true; // Successfully spawned
         }
 
         attempts++;
@@ -298,14 +303,14 @@ CircuitBoard.prototype.spawnCar = function() {
                     this.ctx.fill();
 
                     this.cars.push(car);
-                    return;
+                    return true; // Successfully spawned
                 }
             }
         }
     }
 
-    // No free spots left - just return, cells will be recycled
-    return;
+    // No free spots left - cells will be recycled later
+    return false;
 };
 
 CircuitBoard.prototype.onResize = function() {
@@ -510,7 +515,7 @@ CircuitBoard.prototype.draw = function() {
             }
         }
 
-        // Aggressively spawn new cars to fill all gaps - animation never stops
+        // Spawn new cars one at a time - animation never stops
         if (this.cars.length < this.maxCars) {
             this.spawnCar();
         }
