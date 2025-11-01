@@ -143,10 +143,10 @@
 
         <div class="control-group">
             <label>
-                Fade Speed
-                <span class="value" id="fade-value">0.02</span>
+                Trace Lifetime (sec)
+                <span class="value" id="trace-lifetime-value">2.0</span>
             </label>
-            <input type="range" id="fade" min="0" max="0.05" value="0.02" step="0.005">
+            <input type="range" id="trace-lifetime" min="0.5" max="10" value="2.0" step="0.5">
         </div>
 
         <div class="control-group">
@@ -198,7 +198,7 @@
         // Controls
         const gridSlider = document.getElementById('grid');
         const carsSlider = document.getElementById('cars');
-        const fadeSlider = document.getElementById('fade');
+        const traceLifetimeSlider = document.getElementById('trace-lifetime');
         const widthSlider = document.getElementById('width');
         const delaySlider = document.getElementById('delay');
         const spawnDelaySlider = document.getElementById('spawn-delay');
@@ -213,7 +213,7 @@
                     window.circuitBoardInstance = new CircuitBoard({
                         hexSize: parseInt(gridSlider.value),
                         maxCars: parseInt(carsSlider.value),
-                        fadeAlpha: parseFloat(fadeSlider.value),
+                        traceLifetime: parseFloat(traceLifetimeSlider.value),
                         lineWidth: parseFloat(widthSlider.value),
                         stepDelay: parseInt(delaySlider.value),
                         spawnDelay: parseInt(spawnDelaySlider.value)
@@ -230,10 +230,14 @@
             }
         });
 
-        fadeSlider.addEventListener('input', function() {
-            document.getElementById('fade-value').textContent = this.value;
+        traceLifetimeSlider.addEventListener('input', function() {
+            document.getElementById('trace-lifetime-value').textContent = this.value;
             if (window.circuitBoardInstance) {
-                window.circuitBoardInstance.fadeAlpha = parseFloat(this.value);
+                var lifetime = parseFloat(this.value);
+                window.circuitBoardInstance.traceLifetime = lifetime;
+                // Recalculate fadeAlpha and fadeTime based on new lifetime
+                window.circuitBoardInstance.fadeAlpha = Math.min(0.1, Math.max(0.005, 0.075 / lifetime));
+                window.circuitBoardInstance.fadeTime = lifetime * 1000;
             }
         });
 
@@ -266,7 +270,7 @@
                 window.circuitBoardInstance = new CircuitBoard({
                     hexSize: parseInt(gridSlider.value),
                     maxCars: parseInt(carsSlider.value),
-                    fadeAlpha: parseFloat(fadeSlider.value),
+                    traceLifetime: parseFloat(traceLifetimeSlider.value),
                     lineWidth: parseFloat(widthSlider.value),
                     stepDelay: parseInt(delaySlider.value),
                     spawnDelay: parseInt(spawnDelaySlider.value)

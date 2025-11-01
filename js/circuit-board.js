@@ -160,8 +160,19 @@ var CircuitBoard = function(options) {
     this.allLines = []; // Track all drawn line segments for collision detection
     this.cars = []; // Active cars
     this.maxCars = options.maxCars || 2; // Maximum simultaneous cars
-    this.fadeAlpha = options.fadeAlpha !== undefined ? options.fadeAlpha : 0.02; // Default fade enabled
-    this.fadeTime = options.fadeTime || 1500; // Time before cells are cleared (ms) - shorter for continuous animation
+
+    // Trace lifetime in seconds - controls both fading and cell recycling
+    this.traceLifetime = options.traceLifetime !== undefined ? options.traceLifetime : 2.0; // Default 2 seconds
+
+    // Calculate fadeAlpha to achieve visual fade over traceLifetime
+    // At 60fps, we need: (1 - fadeAlpha)^(60 * traceLifetime) ≈ 0.01 (fade to ~1%)
+    // Solving: fadeAlpha ≈ 1 - 0.01^(1/(60*traceLifetime))
+    // Simplified approximation: fadeAlpha ≈ 0.075 / traceLifetime
+    this.fadeAlpha = Math.min(0.1, Math.max(0.005, 0.075 / this.traceLifetime));
+
+    // Cell recycling happens at traceLifetime (in ms)
+    this.fadeTime = this.traceLifetime * 1000;
+
     this.lineWidth = options.lineWidth || 120; // Line width - thicker than grid, overlapping
     this.drawCounter = 0;
     this.animationId = null;
