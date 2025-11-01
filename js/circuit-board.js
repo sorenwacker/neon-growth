@@ -166,9 +166,10 @@ var CircuitBoard = function(options) {
 
     // Calculate fadeAlpha to achieve visual fade over traceLifetime
     // At 60fps, we need: (1 - fadeAlpha)^(60 * traceLifetime) ≈ 0.01 (fade to ~1%)
-    // Solving: fadeAlpha ≈ 1 - 0.01^(1/(60*traceLifetime))
-    // Simplified approximation: fadeAlpha ≈ 0.075 / traceLifetime
-    this.fadeAlpha = Math.min(0.1, Math.max(0.005, 0.075 / this.traceLifetime));
+    // Solving: fadeAlpha = 1 - 0.01^(1/(60 * traceLifetime))
+    var totalFrames = 60 * this.traceLifetime;
+    this.fadeAlpha = 1 - Math.pow(0.01, 1 / totalFrames);
+    this.fadeAlpha = Math.min(0.2, Math.max(0.001, this.fadeAlpha)); // Clamp to safe range
 
     // Cell recycling happens at traceLifetime (in ms)
     this.fadeTime = this.traceLifetime * 1000;
