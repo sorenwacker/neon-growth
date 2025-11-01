@@ -249,8 +249,21 @@
 
         widthSlider.addEventListener('input', function() {
             document.getElementById('width-value').textContent = this.value;
+            // Line width change requires full reset to avoid mixed widths
             if (window.circuitBoardInstance) {
-                window.circuitBoardInstance.lineWidth = parseFloat(this.value);
+                window.circuitBoardInstance.destroy();
+                setTimeout(() => {
+                    window.circuitBoardInstance = new CircuitBoard({
+                        hexSize: parseInt(gridSlider.value),
+                        maxCars: parseInt(carsSlider.value),
+                        traceLifetime: parseFloat(traceLifetimeSlider.value),
+                        lineWidth: parseFloat(widthSlider.value),
+                        stepDelay: parseInt(delaySlider.value),
+                        spawnDelay: parseInt(spawnDelaySlider.value),
+                        mutationRate: parseInt(mutationRateSlider.value) / 100
+                    });
+                    window.circuitBoardInstance.theme = 'light';
+                }, 100);
             }
         });
 
