@@ -225,6 +225,14 @@ CircuitBoard.prototype.init = function() {
 };
 
 CircuitBoard.prototype.setup = function() {
+    // Remove any existing circuit board canvases first
+    var existingCanvases = document.querySelectorAll('canvas[style*="position: fixed"]');
+    for (var i = 0; i < existingCanvases.length; i++) {
+        if (existingCanvases[i].parentNode) {
+            existingCanvases[i].parentNode.removeChild(existingCanvases[i]);
+        }
+    }
+
     // create canvas - extend beyond visible area for seamless patterns
     var margin = 300; // Extra space on each side
     this.canvas = document.createElement('canvas');
