@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circuit Board Animation Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background:
+                radial-gradient(ellipse at top left, rgba(103, 195, 212, 0.12), transparent 50%),
+                radial-gradient(ellipse at bottom right, rgba(109, 212, 199, 0.12), transparent 50%),
+                #f0f9ff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            min-width: 200px;
+        }
+
+        .controls h3 {
+            margin: 0 0 15px 0;
+            font-size: 14px;
+            color: #333;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+
+        .control-group .value {
+            display: inline-block;
+            font-size: 12px;
+            color: #333;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px;
+            background: #0077cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #005fa3;
+        }
+
+        .stats {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            font-size: 12px;
+            color: #666;
+        }
+
+        .stats div {
+            margin: 3px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h3>Controls</h3>
+
+        <div class="control-group">
+            <label>
+                Hex Size (px)
+                <span class="value" id="grid-value">100</span>
+            </label>
+            <input type="range" id="grid" min="50" max="200" value="100" step="10">
+        </div>
+
+        <div class="control-group">
+            <label>
+                Max Cars
+                <span class="value" id="cars-value">5</span>
+            </label>
+            <input type="range" id="cars" min="1" max="10" value="5" step="1">
+        </div>
+
+        <div class="control-group">
+            <label>
+                Fade Speed
+                <span class="value" id="fade-value">0.02</span>
+            </label>
+            <input type="range" id="fade" min="0" max="0.05" value="0.02" step="0.005">
+        </div>
+
+        <div class="control-group">
+            <label>
+                Line Width
+                <span class="value" id="width-value">120</span>
+            </label>
+            <input type="range" id="width" min="1" max="150" value="120" step="1">
+        </div>
+
+        <div class="control-group">
+            <label>
+                Step Delay (ms)
+                <span class="value" id="delay-value">25</span>
+            </label>
+            <input type="range" id="delay" min="10" max="500" value="25" step="5">
+        </div>
+
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <h4 style="font-size: 12px; margin-bottom: 10px; color: #666;">Presets</h4>
+            <button id="preset-sparse" style="margin-bottom: 5px;">Sparse (5 cars, 100px)</button>
+            <button id="preset-dense" style="margin-bottom: 5px;">Dense (10 cars, 50px)</button>
+        </div>
+
+        <button id="reset">Reset Animation</button>
+    </div>
+
+    <div class="stats">
+        <div>Active Cars: <strong id="car-count">0</strong></div>
+        <div>Occupied Cells: <strong id="cell-count">0</strong></div>
+        <div>Grid: <strong id="grid-size">0x0</strong></div>
+        <div>FPS: <strong id="fps">0</strong></div>
+    </div>
+
+    <script src="js/circuit-board.js"></script>
+
+    <script>
+        // Set theme to light for demo
+        document.documentElement.setAttribute('data-theme', 'light');
+
+        // Controls
+        const gridSlider = document.getElementById('grid');
+        const carsSlider = document.getElementById('cars');
+        const fadeSlider = document.getElementById('fade');
+        const widthSlider = document.getElementById('width');
+        const delaySlider = document.getElementById('delay');
+        const resetBtn = document.getElementById('reset');
+
+        gridSlider.addEventListener('input', function() {
+            document.getElementById('grid-value').textContent = this.value;
+            // Grid size change requires full reset
+            if (window.circuitBoardInstance) {
+                window.circuitBoardInstance.destroy();
+                setTimeout(() => {
+                    window.circuitBoardInstance = new CircuitBoard({
+                        hexSize: parseInt(gridSlider.value),
+                        maxCars: parseInt(carsSlider.value),
+                        fadeAlpha: parseFloat(fadeSlider.value),
+                        lineWidth: parseFloat(widthSlider.value),
+                        stepDelay: parseInt(delaySlider.value)
+                    });
+                    window.circuitBoardInstance.theme = 'light';
+                }, 100);
+            }
+        });
+
+        carsSlider.addEventListener('input', function() {
+            document.getElementById('cars-value').textContent = this.value;
+            if (window.circuitBoardInstance) {
+                window.circuitBoardInstance.maxCars = parseInt(this.value);
+            }
+        });
+
+        fadeSlider.addEventListener('input', function() {
+            document.getElementById('fade-value').textContent = this.value;
+            if (window.circuitBoardInstance) {
+                window.circuitBoardInstance.fadeAlpha = parseFloat(this.value);
+            }
+        });
+
+        widthSlider.addEventListener('input', function() {
+            document.getElementById('width-value').textContent = this.value;
+            if (window.circuitBoardInstance) {
+                window.circuitBoardInstance.lineWidth = parseFloat(this.value);
+            }
+        });
+
+        delaySlider.addEventListener('input', function() {
+            document.getElementById('delay-value').textContent = this.value;
+            if (window.circuitBoardInstance) {
+                window.circuitBoardInstance.stepDelay = parseInt(this.value);
+            }
+        });
+
+        resetBtn.addEventListener('click', function() {
+            if (window.circuitBoardInstance) {
+                window.circuitBoardInstance.destroy();
+            }
+            setTimeout(() => {
+                window.circuitBoardInstance = new CircuitBoard({
+                    hexSize: parseInt(gridSlider.value),
+                    maxCars: parseInt(carsSlider.value),
+                    fadeAlpha: parseFloat(fadeSlider.value),
+                    lineWidth: parseFloat(widthSlider.value),
+                    stepDelay: parseInt(delaySlider.value)
+                });
+                window.circuitBoardInstance.theme = 'light';
+            }, 100);
+        });
+
+        // Preset buttons - layer on top without clearing
+        function applyPresetLayer(hexSize, maxCars, lineWidth) {
+            gridSlider.value = hexSize;
+            carsSlider.value = maxCars;
+            widthSlider.value = lineWidth;
+            document.getElementById('grid-value').textContent = hexSize;
+            document.getElementById('cars-value').textContent = maxCars;
+            document.getElementById('width-value').textContent = lineWidth;
+
+            if (window.circuitBoardInstance) {
+                // Keep existing canvas and drawings - just change settings
+                window.circuitBoardInstance.hexSize = hexSize;
+                window.circuitBoardInstance.maxCars = maxCars;
+                window.circuitBoardInstance.lineWidth = lineWidth;
+
+                // Clear cars and reset state but keep canvas drawings
+                window.circuitBoardInstance.cars = [];
+                window.circuitBoardInstance.occupiedCells = {};
+                window.circuitBoardInstance.allLines = [];
+                window.circuitBoardInstance.animationComplete = false;
+                window.circuitBoardInstance.finalDotsDrawn = false;
+
+                // Spawn new cars with new settings
+                for (var i = 0; i < maxCars; i++) {
+                    window.circuitBoardInstance.spawnCar();
+                }
+            }
+        }
+
+        document.getElementById('preset-sparse').addEventListener('click', function() {
+            applyPresetLayer(100, 5, 120);
+        });
+
+        document.getElementById('preset-dense').addEventListener('click', function() {
+            applyPresetLayer(50, 10, 25);
+        });
+
+        // Stats update
+        let frameCount = 0;
+        let lastTime = performance.now();
+
+        function updateStats() {
+            if (window.circuitBoardInstance) {
+                document.getElementById('car-count').textContent =
+                    window.circuitBoardInstance.cars.length;
+
+                document.getElementById('cell-count').textContent =
+                    Object.keys(window.circuitBoardInstance.occupiedCells).length;
+
+                document.getElementById('grid-size').textContent =
+                    window.circuitBoardInstance.hexSize + 'px hex';
+
+                // Calculate FPS
+                frameCount++;
+                const currentTime = performance.now();
+                if (currentTime - lastTime >= 1000) {
+                    document.getElementById('fps').textContent = frameCount;
+                    frameCount = 0;
+                    lastTime = currentTime;
+                }
+            }
+            requestAnimationFrame(updateStats);
+        }
+
+        updateStats();
+    </script>
+</body>
+</html>
