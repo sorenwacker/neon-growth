@@ -38,21 +38,10 @@ Car.prototype.getColor = function() {
     var xRatio = Math.max(0, Math.min(1, this.x / this.canvasWidth));
     var yRatio = Math.max(0, Math.min(1, this.y / this.canvasHeight));
 
-    // Calculate hue based on X position
-    // Phase 1: warm colors - orange to pink (0-340 degrees)
-    // Phase 2: cool colors - purple to magenta (270-330 degrees)
-    var hue, sat, light;
-    if (this.phase === 2) {
-        // Phase 2: Purple to magenta - ULTRA STRONG
-        hue = 270 + (xRatio * 60); // purple (270°) to magenta (330°)
-        sat = 85 + yRatio * 15; // 85-100% - maximum saturation
-        light = 45 + yRatio * 10; // 45-55% - deep, intense colors
-    } else {
-        // Phase 1: Warm colors (orange to pink)
-        hue = xRatio * 340; // orange (0-30°) through red to pink (340°)
-        sat = 50 + yRatio * 30; // 50-80% - vibrant
-        light = 60 + yRatio * 15; // 60-75% - rich colors
-    }
+    // Purple to magenta gradient - ULTRA STRONG
+    var hue = 270 + (xRatio * 60); // purple (270°) to magenta (330°)
+    var sat = 85 + yRatio * 15; // 85-100% - maximum saturation
+    var light = 45 + yRatio * 10; // 45-55% - deep, intense colors
 
     return 'hsla(' + ~~hue + ', ' + ~~sat + '%, ' + ~~light + '%, 1)';
 };
@@ -167,30 +156,21 @@ var CircuitBoard = function(options) {
     this.animationComplete = false; // Track when canvas is fully filled
     this.finalDotsDrawn = false; // Track if we've drawn remaining dots
 
-    // Layered animation: Phase 1 = thick/sparse, Phase 2 = thin/dense
+    // Single configuration - thin lines with vibrant colors
     var scaleFactor = Math.max(0.4, Math.min(1.5, window.innerWidth / 1400));
-    this.currentPhase = 1;
 
     // More cars as screen gets bigger
-    var phase1Cars = 10;
-    var phase2Cars = 15;
+    var numCars = 20;
     if (window.innerWidth >= 768) {
-        phase1Cars = 15;
-        phase2Cars = 20;
+        numCars = 25;
     }
     if (window.innerWidth >= 1400) {
-        phase1Cars = 20;
-        phase2Cars = 25;
+        numCars = 30;
     }
 
-    this.phase1Config = {
-        hexSize: Math.round(100 * scaleFactor),
-        maxCars: phase1Cars,
-        lineWidth: Math.round(120 * scaleFactor)
-    };
-    this.phase2Config = {
+    this.config = {
         hexSize: Math.round(50 * scaleFactor),
-        maxCars: phase2Cars,
+        maxCars: numCars,
         lineWidth: Math.round(25 * scaleFactor)
     };
 
@@ -201,12 +181,12 @@ var CircuitBoard = function(options) {
 CircuitBoard.prototype.init = function() {
     this.setup();
 
-    // Apply Phase 1 configuration (thick lines)
-    this.hexSize = this.phase1Config.hexSize;
-    this.maxCars = this.phase1Config.maxCars;
-    this.lineWidth = this.phase1Config.lineWidth;
+    // Apply configuration
+    this.hexSize = this.config.hexSize;
+    this.maxCars = this.config.maxCars;
+    this.lineWidth = this.config.lineWidth;
 
-    // Spawn initial cars up to maxCars
+    // Spawn initial cars
     for (var i = 0; i < this.maxCars; i++) {
         this.spawnCar();
     }
