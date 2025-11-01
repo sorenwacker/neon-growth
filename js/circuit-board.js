@@ -207,23 +207,8 @@ var CircuitBoard = function(options) {
     this.animationComplete = false; // Track when canvas is fully filled
     this.finalDotsDrawn = false; // Track if we've drawn remaining dots
 
-    // Apply default configuration if no options provided
-    if (!options.hexSize && !options.maxCars && !options.lineWidth) {
-        var scaleFactor = Math.max(0.4, Math.min(1.5, window.innerWidth / 1400));
-
-        // More cars as screen gets bigger
-        var numCars = 20;
-        if (window.innerWidth >= 768) {
-            numCars = 25;
-        }
-        if (window.innerWidth >= 1400) {
-            numCars = 30;
-        }
-
-        this.hexSize = Math.round(50 * scaleFactor);
-        this.maxCars = numCars;
-        this.lineWidth = Math.round(25 * scaleFactor);
-    }
+    // Defaults are now handled by || operators above
+    // Demo always provides options, so no need for this block
 
     // init
     this.init();
