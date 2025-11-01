@@ -154,6 +154,8 @@ var CircuitBoard = function(options) {
     this.animationId = null;
     this.stepDelay = options.stepDelay || 25; // Milliseconds between steps - very fast animation
     this.lastStepTime = 0;
+    this.spawnDelay = options.spawnDelay || 500; // Milliseconds between spawning new cars
+    this.lastSpawnTime = 0;
     this.theme = document.documentElement.getAttribute('data-theme') || 'dark';
     this.lastCanvasWidth = 0;
     this.lastCanvasHeight = 0;
@@ -161,23 +163,23 @@ var CircuitBoard = function(options) {
     this.animationComplete = false; // Track when canvas is fully filled
     this.finalDotsDrawn = false; // Track if we've drawn remaining dots
 
-    // Single configuration - thin lines with vibrant colors
-    var scaleFactor = Math.max(0.4, Math.min(1.5, window.innerWidth / 1400));
+    // Apply default configuration if no options provided
+    if (!options.hexSize && !options.maxCars && !options.lineWidth) {
+        var scaleFactor = Math.max(0.4, Math.min(1.5, window.innerWidth / 1400));
 
-    // More cars as screen gets bigger
-    var numCars = 20;
-    if (window.innerWidth >= 768) {
-        numCars = 25;
-    }
-    if (window.innerWidth >= 1400) {
-        numCars = 30;
-    }
+        // More cars as screen gets bigger
+        var numCars = 20;
+        if (window.innerWidth >= 768) {
+            numCars = 25;
+        }
+        if (window.innerWidth >= 1400) {
+            numCars = 30;
+        }
 
-    this.config = {
-        hexSize: Math.round(50 * scaleFactor),
-        maxCars: numCars,
-        lineWidth: Math.round(25 * scaleFactor)
-    };
+        this.hexSize = Math.round(50 * scaleFactor);
+        this.maxCars = numCars;
+        this.lineWidth = Math.round(25 * scaleFactor);
+    }
 
     // init
     this.init();
@@ -185,11 +187,6 @@ var CircuitBoard = function(options) {
 
 CircuitBoard.prototype.init = function() {
     this.setup();
-
-    // Apply configuration
-    this.hexSize = this.config.hexSize;
-    this.maxCars = this.config.maxCars;
-    this.lineWidth = this.config.lineWidth;
 
     // Spawn initial cars
     for (var i = 0; i < this.maxCars; i++) {
@@ -506,18 +503,15 @@ CircuitBoard.prototype.draw = function() {
                 this.ctx.arc(car.x, car.y, this.lineWidth / 2, 0, Math.PI * 2);
                 this.ctx.fill();
 
-                // Remove stuck car and spawn new one
+                // Remove stuck car - new car will spawn with delay
                 this.cars.splice(i, 1);
-                // Always spawn - animation never stops
-                if (this.cars.length < this.maxCars) {
-                    this.spawnCar();
-                }
             }
         }
 
-        // Spawn new cars one at a time - animation never stops
-        if (this.cars.length < this.maxCars) {
+        // Spawn new cars one at a time with delay - animation never stops
+        if (this.cars.length < this.maxCars && currentTime - this.lastSpawnTime >= this.spawnDelay) {
             this.spawnCar();
+            this.lastSpawnTime = currentTime;
         }
     }
 };
