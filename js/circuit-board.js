@@ -350,7 +350,7 @@ CircuitBoard.prototype.spawnCar = function() {
         var key = this.getHexKey(gridX, gridY);
         if (!this.occupiedCells[key]) {
             // Spawn with fitness-selected strategy
-            var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, this.currentPhase, selectedStrategy);
+            var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, null, selectedStrategy);
             car.prevX = gridX;
             car.prevY = gridY;
             this.occupiedCells[key] = (this.occupiedCells[key] || 0) + 1;
@@ -386,7 +386,7 @@ CircuitBoard.prototype.spawnCar = function() {
                 var key = this.getHexKey(gridX, gridY);
                 if (!this.occupiedCells[key]) {
                     // Found a free spot - spawn with fitness-selected strategy
-                    var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, this.currentPhase, selectedStrategy);
+                    var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, null, selectedStrategy);
                     car.prevX = gridX;
                     car.prevY = gridY;
                     this.occupiedCells[key] = (this.occupiedCells[key] || 0) + 1;
@@ -445,23 +445,10 @@ CircuitBoard.prototype.onResize = function() {
         self.cars = [];
         self.occupiedCells = {};
         self.allLines = [];
-        self.currentPhase = 1;
         self.animationComplete = false;
         self.finalDotsDrawn = false;
 
-        // Recalculate scale factor for new size
-        var scaleFactor = Math.max(0.4, Math.min(1.2, window.innerWidth / 1400));
-        self.phase1Config.hexSize = Math.round(100 * scaleFactor);
-        self.phase1Config.lineWidth = Math.round(120 * scaleFactor);
-        self.phase2Config.hexSize = Math.round(50 * scaleFactor);
-        self.phase2Config.lineWidth = Math.round(25 * scaleFactor);
-
-        // Set phase 1 config (restart from beginning)
-        self.hexSize = self.phase1Config.hexSize;
-        self.maxCars = self.phase1Config.maxCars;
-        self.lineWidth = self.phase1Config.lineWidth;
-
-        // Spawn new cars
+        // Spawn new cars with current settings
         for (var i = 0; i < self.maxCars; i++) {
             self.spawnCar();
         }
@@ -474,15 +461,14 @@ CircuitBoard.prototype.animate = function() {
 };
 
 CircuitBoard.prototype.draw = function() {
-    // Fill remaining grid points with dots when complete
-    if (this.animationComplete && this.cars.length === 0) {
+    // Animation runs continuously - no completion state needed
+    if (false) { // Disabled legacy completion code
         if (!this.finalDotsDrawn) {
             this.drawRemainingDots();
             this.finalDotsDrawn = true;
 
-            // LAYERED EFFECT: Start Phase 2 after Phase 1 completes
-            if (this.currentPhase === 1) {
-                this.startPhase2();
+            // Legacy phase transition code removed
+            if (false) {
             }
         }
         return;
@@ -813,25 +799,6 @@ CircuitBoard.prototype.executeMove = function(car, move) {
     });
 };
 
-CircuitBoard.prototype.startPhase2 = function() {
-    // Switch to Phase 2 configuration (thin lines) without clearing canvas
-    this.currentPhase = 2;
-    this.hexSize = this.phase2Config.hexSize;
-    this.maxCars = this.phase2Config.maxCars;
-    this.lineWidth = this.phase2Config.lineWidth;
-
-    // Reset state but keep canvas drawings
-    this.cars = [];
-    this.occupiedCells = {};
-    this.allLines = [];
-    this.animationComplete = false;
-    this.finalDotsDrawn = false;
-
-    // Spawn new cars with Phase 2 settings
-    for (var i = 0; i < this.maxCars; i++) {
-        this.spawnCar();
-    }
-};
 
 CircuitBoard.prototype.drawRemainingDots = function() {
     // Fill all remaining unoccupied grid points with dots
@@ -851,7 +818,7 @@ CircuitBoard.prototype.drawRemainingDots = function() {
                 if (!this.occupiedCells[key]) {
                     // Draw a dot at this unoccupied position
                     // Create a temporary car just to get the color
-                    var tempCar = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, this.currentPhase);
+                    var tempCar = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize);
                     this.ctx.fillStyle = tempCar.color;
                     this.ctx.beginPath();
                     this.ctx.arc(gridX, gridY, this.lineWidth / 2, 0, Math.PI * 2);
