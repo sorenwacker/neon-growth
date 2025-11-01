@@ -14,9 +14,14 @@ var Car = function(x, y, canvasWidth, canvasHeight, hexSize, phase) {
     this.stuck = false;
     this.color = this.getColor();
 
+    // Each car picks a movement strategy at birth
+    var strategies = ['wall-follower', 'wanderer', 'explorer', 'spiral'];
+    this.strategy = strategies[Math.floor(Math.random() * strategies.length)];
+
     // Each car picks a preferred turning direction at birth and maintains it for life
     this.preferredTurnDirection = Math.random() < 0.5 ? 'right' : 'left';
     this.previousDirection = null; // Track where we came from to calculate turn angle
+    this.straightMoves = 0; // Track consecutive straight moves for wanderer strategy
 
     var rowHeight = hexSize * 0.866; // sqrt(3)/2
 
@@ -551,26 +556,61 @@ CircuitBoard.prototype.calculateMove = function(car) {
     var straightAhead = car.currentDirection;
     var priorities;
 
-    if (car.preferredTurnDirection === 'right') {
-        // Right turn: sharp turn FIRST, then straight, then larger turns
+    // Strategy-based movement priorities
+    if (car.strategy === 'wanderer') {
+        // Wanderer: strongly prefers straight, occasional random turns
         priorities = [
-            (straightAhead + 1) % 6,           // 60° right turn (sharp) - TRY FIRST
-            straightAhead,                      // 0° - straight (continue same direction)
-            (straightAhead + 2) % 6,           // 120° right turn
-            (straightAhead + 3) % 6,           // 180° (reverse - back where we came)
-            (straightAhead + 4) % 6,           // 240° left turn
-            (straightAhead + 5) % 6            // 300° left turn
+            straightAhead,                      // 0° - straight (TRY FIRST)
+            (straightAhead + (Math.random() < 0.5 ? 1 : 5)) % 6, // Random 60° turn
+            (straightAhead + (Math.random() < 0.5 ? 2 : 4)) % 6, // Random 120° turn
+            (straightAhead + 3) % 6,           // 180° reverse
+            (straightAhead + 1) % 6,           // 60° right
+            (straightAhead + 5) % 6            // 60° left
         ];
+    } else if (car.strategy === 'spiral') {
+        // Spiral: always tries to turn in one direction to create tight spirals
+        var turnDir = car.preferredTurnDirection === 'right' ? 1 : 5;
+        priorities = [
+            (straightAhead + turnDir) % 6,     // Sharp turn in preferred direction - TRY FIRST
+            (straightAhead + turnDir * 2) % 6, // Larger turn in same direction
+            straightAhead,                      // Straight if can't turn
+            (straightAhead + 3) % 6,           // 180° reverse
+            (straightAhead + (turnDir === 1 ? 5 : 1)) % 6, // Opposite turn
+            (straightAhead + (turnDir === 1 ? 4 : 2)) % 6
+        ];
+    } else if (car.strategy === 'explorer') {
+        // Explorer: randomizes direction priorities to explore widely
+        priorities = [0, 1, 2, 3, 4, 5].map(function(i) { return (straightAhead + i) % 6; });
+        // Shuffle the priorities for more randomness
+        for (var i = priorities.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var temp = priorities[i];
+            priorities[i] = priorities[j];
+            priorities[j] = temp;
+        }
     } else {
-        // Left turn: sharp turn FIRST, then straight, then larger turns
-        priorities = [
-            (straightAhead + 5) % 6,           // 300° / -60° left turn (sharp) - TRY FIRST
-            straightAhead,                      // 0° - straight (continue same direction)
-            (straightAhead + 4) % 6,           // 240° / -120° left turn
-            (straightAhead + 3) % 6,           // 180° (reverse - back where we came)
-            (straightAhead + 2) % 6,           // 120° right turn
-            (straightAhead + 1) % 6            // 60° right turn
-        ];
+        // Default wall-follower strategy
+        if (car.preferredTurnDirection === 'right') {
+            // Right turn: sharp turn FIRST, then straight, then larger turns
+            priorities = [
+                (straightAhead + 1) % 6,           // 60° right turn (sharp) - TRY FIRST
+                straightAhead,                      // 0° - straight (continue same direction)
+                (straightAhead + 2) % 6,           // 120° right turn
+                (straightAhead + 3) % 6,           // 180° (reverse - back where we came)
+                (straightAhead + 4) % 6,           // 240° left turn
+                (straightAhead + 5) % 6            // 300° left turn
+            ];
+        } else {
+            // Left turn: sharp turn FIRST, then straight, then larger turns
+            priorities = [
+                (straightAhead + 5) % 6,           // 300° / -60° left turn (sharp) - TRY FIRST
+                straightAhead,                      // 0° - straight (continue same direction)
+                (straightAhead + 4) % 6,           // 240° / -120° left turn
+                (straightAhead + 3) % 6,           // 180° (reverse - back where we came)
+                (straightAhead + 2) % 6,           // 120° right turn
+                (straightAhead + 1) % 6            // 60° right turn
+            ];
+        }
     }
 
     // Try each direction in priority order
