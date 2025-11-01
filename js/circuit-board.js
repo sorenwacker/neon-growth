@@ -4,7 +4,7 @@
 //
 // Car model - moves in discrete steps on hexagonal grid
 //
-var Car = function(x, y, canvasWidth, canvasHeight, hexSize, phase) {
+var Car = function(x, y, canvasWidth, canvasHeight, hexSize, phase, strategy) {
     this.x = x;
     this.y = y;
     this.hexSize = hexSize;
@@ -16,9 +16,13 @@ var Car = function(x, y, canvasWidth, canvasHeight, hexSize, phase) {
     this.hueOffset = Math.random() * 360; // Each car gets unique base hue
     this.color = this.getColor();
 
-    // Each car picks a movement strategy at birth
-    var strategies = ['wall-follower', 'wanderer', 'explorer', 'spiral'];
-    this.strategy = strategies[Math.floor(Math.random() * strategies.length)];
+    // Strategy can be passed in (fitness-based) or random (fallback)
+    if (strategy) {
+        this.strategy = strategy;
+    } else {
+        var strategies = ['wall-follower', 'wanderer', 'explorer', 'spiral'];
+        this.strategy = strategies[Math.floor(Math.random() * strategies.length)];
+    }
 
     // Each car picks a preferred turning direction at birth and maintains it for life
     this.preferredTurnDirection = Math.random() < 0.5 ? 'right' : 'left';
@@ -161,6 +165,14 @@ var CircuitBoard = function(options) {
     this.cars = []; // Active cars
     this.maxCars = options.maxCars || 2; // Maximum simultaneous cars
 
+    // Strategy fitness tracking - survival of the fittest
+    this.strategyFitness = {
+        'wall-follower': { totalLifetime: 0, count: 0 },
+        'wanderer': { totalLifetime: 0, count: 0 },
+        'explorer': { totalLifetime: 0, count: 0 },
+        'spiral': { totalLifetime: 0, count: 0 }
+    };
+
     // Trace lifetime in seconds - controls both fading and cell recycling
     this.traceLifetime = options.traceLifetime !== undefined ? options.traceLifetime : 2.0; // Default 2 seconds
 
@@ -258,7 +270,48 @@ CircuitBoard.prototype.createObstacles = function() {
     this.obstacles = [];
 };
 
+CircuitBoard.prototype.selectStrategyByFitness = function() {
+    // Calculate average lifetime for each strategy
+    var strategies = ['wall-follower', 'wanderer', 'explorer', 'spiral'];
+    var weights = [];
+    var totalWeight = 0;
+
+    for (var i = 0; i < strategies.length; i++) {
+        var strategy = strategies[i];
+        var fitness = this.strategyFitness[strategy];
+
+        // Average lifetime is the fitness score (more lifetime = better strategy)
+        var avgLifetime = fitness.count > 0 ? fitness.totalLifetime / fitness.count : 1.0;
+
+        // Weight is proportional to average lifetime (squared for stronger selection pressure)
+        var weight = Math.pow(avgLifetime, 2);
+        weights.push(weight);
+        totalWeight += weight;
+    }
+
+    // If no data yet, use equal weights
+    if (totalWeight === 0) {
+        return strategies[Math.floor(Math.random() * strategies.length)];
+    }
+
+    // Weighted random selection
+    var random = Math.random() * totalWeight;
+    var cumulativeWeight = 0;
+
+    for (var i = 0; i < strategies.length; i++) {
+        cumulativeWeight += weights[i];
+        if (random <= cumulativeWeight) {
+            return strategies[i];
+        }
+    }
+
+    return strategies[strategies.length - 1]; // Fallback
+};
+
 CircuitBoard.prototype.spawnCar = function() {
+    // Select strategy based on fitness (survival of the fittest)
+    var selectedStrategy = this.selectStrategyByFitness();
+
     // Try to find an unoccupied random hexagonal grid position
     var rowHeight = this.hexSize * 0.866;
     var maxAttempts = 100;
@@ -275,8 +328,8 @@ CircuitBoard.prototype.spawnCar = function() {
         // CRITICAL: Use exact same key generation as everywhere else
         var key = this.getHexKey(gridX, gridY);
         if (!this.occupiedCells[key]) {
-            // Spawn at any free position - even if stuck, it fills that cell
-            var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, this.currentPhase);
+            // Spawn with fitness-selected strategy
+            var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, this.currentPhase, selectedStrategy);
             car.prevX = gridX;
             car.prevY = gridY;
             this.occupiedCells[key] = (this.occupiedCells[key] || 0) + 1;
@@ -311,8 +364,8 @@ CircuitBoard.prototype.spawnCar = function() {
                 // CRITICAL: Use exact same key generation as everywhere else
                 var key = this.getHexKey(gridX, gridY);
                 if (!this.occupiedCells[key]) {
-                    // Found a free spot - spawn there even if it can't move
-                    var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, this.currentPhase);
+                    // Found a free spot - spawn with fitness-selected strategy
+                    var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, this.currentPhase, selectedStrategy);
                     car.prevX = gridX;
                     car.prevY = gridY;
                     this.occupiedCells[key] = (this.occupiedCells[key] || 0) + 1;
@@ -527,6 +580,13 @@ CircuitBoard.prototype.draw = function() {
                 this.ctx.beginPath();
                 this.ctx.arc(car.x, car.y, this.lineWidth / 2, 0, Math.PI * 2);
                 this.ctx.fill();
+
+                // Record fitness: how long did this car survive?
+                var lifetime = (Date.now() - car.birthTime) / 1000; // seconds
+                if (this.strategyFitness[car.strategy]) {
+                    this.strategyFitness[car.strategy].totalLifetime += lifetime;
+                    this.strategyFitness[car.strategy].count += 1;
+                }
 
                 // Remove stuck car - new car will spawn with delay
                 this.cars.splice(i, 1);
