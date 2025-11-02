@@ -673,28 +673,30 @@ CircuitBoard.prototype.draw = function() {
             }
         }
 
-        // Infinite lifetime mode: remove oldest dead car when too many exist
-        if (this.infiniteLifetime && stuckCars.length > 0 && Object.keys(this.deadCarIds).length > this.maxCars) {
-            // Find oldest dead car by looking at death timestamps
-            var oldestCarId = null;
-            var oldestDeathTime = Infinity;
-
-            for (var carId in this.deadCarIds) {
-                if (this.deadCarIds[carId] < oldestDeathTime) {
-                    oldestDeathTime = this.deadCarIds[carId];
-                    oldestCarId = parseInt(carId);
-                }
-            }
-
-            if (oldestCarId !== null) {
-                // Remove oldest dead car's traces and cells
-                this.removeCarTraces(oldestCarId);
-            }
-        }
-
         // Spawn new cars one at a time with delay - animation never stops
         if (this.cars.length < this.maxCars && currentTime - this.lastSpawnTime >= this.spawnDelay) {
-            this.spawnCar();
+            var spawnSuccess = this.spawnCar();
+
+            // Infinite lifetime mode: if spawn failed due to full canvas, remove oldest dead car
+            if (this.infiniteLifetime && !spawnSuccess && Object.keys(this.deadCarIds).length > 0) {
+                // Find oldest dead car by looking at death timestamps
+                var oldestCarId = null;
+                var oldestDeathTime = Infinity;
+
+                for (var carId in this.deadCarIds) {
+                    if (this.deadCarIds[carId] < oldestDeathTime) {
+                        oldestDeathTime = this.deadCarIds[carId];
+                        oldestCarId = parseInt(carId);
+                    }
+                }
+
+                if (oldestCarId !== null) {
+                    // Remove oldest dead car's traces and cells to free up space
+                    this.removeCarTraces(oldestCarId);
+                    // Try spawning again after making room
+                    this.spawnCar();
+                }
+            }
             this.lastSpawnTime = currentTime;
         }
     }
