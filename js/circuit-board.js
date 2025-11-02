@@ -545,11 +545,21 @@ CircuitBoard.prototype.draw = function() {
                 var fadedLight = Math.round(color.light * darknessFactor);
                 var strokeStyle = 'hsl(' + color.hue + ', ' + color.sat + '%, ' + fadedLight + '%)';
 
-                this.ctx.strokeStyle = strokeStyle;
-                this.ctx.beginPath();
-                this.ctx.moveTo(segment.x1, segment.y1);
-                this.ctx.lineTo(segment.x2, segment.y2);
-                this.ctx.stroke();
+                // Check if this is a dot (zero-length line)
+                if (segment.x1 === segment.x2 && segment.y1 === segment.y2) {
+                    // Draw as a dot
+                    this.ctx.fillStyle = strokeStyle;
+                    this.ctx.beginPath();
+                    this.ctx.arc(segment.x1, segment.y1, this.lineWidth / 2, 0, Math.PI * 2);
+                    this.ctx.fill();
+                } else {
+                    // Draw as a line
+                    this.ctx.strokeStyle = strokeStyle;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(segment.x1, segment.y1);
+                    this.ctx.lineTo(segment.x2, segment.y2);
+                    this.ctx.stroke();
+                }
             }
         }
     }
@@ -644,8 +654,28 @@ CircuitBoard.prototype.draw = function() {
                     entry.move = null;
                 }
             } else {
-                // No valid move found
+                // No valid move found - car dies on the spot
                 entry.car.stuck = true;
+
+                // Draw a dot at the death position so there's at least a visible mark
+                this.ctx.fillStyle = entry.car.color;
+                this.ctx.beginPath();
+                this.ctx.arc(entry.car.x, entry.car.y, this.lineWidth / 2, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Also record this as a "line" so it appears in the trace system
+                var deathDot = {
+                    x1: entry.car.x,
+                    y1: entry.car.y,
+                    x2: entry.car.x,
+                    y2: entry.car.y,
+                    carId: entry.car.id,
+                    hueOffset: entry.car.hueOffset,
+                    birthTime: entry.car.birthTime,
+                    timestamp: Date.now(),
+                    segmentIndex: this.allLines.filter(function(l) { return l.carId === entry.car.id; }).length
+                };
+                this.allLines.push(deathDot);
             }
         }
 
