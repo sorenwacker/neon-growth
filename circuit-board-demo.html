@@ -243,7 +243,9 @@
                 var totalFrames = 60 * lifetime;
                 var fadeAlpha = 1 - Math.pow(0.01, 1 / totalFrames);
                 window.circuitBoardInstance.fadeAlpha = Math.min(0.2, Math.max(0.001, fadeAlpha));
-                window.circuitBoardInstance.fadeTime = lifetime * 1000;
+                // Cell recycling at 40% opacity
+                var timeToFortyPercent = Math.log(0.4) / (60 * Math.log(1 - fadeAlpha));
+                window.circuitBoardInstance.fadeTime = timeToFortyPercent * 1000;
             }
         });
 

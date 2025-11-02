@@ -190,8 +190,11 @@ var CircuitBoard = function(options) {
     this.fadeAlpha = 1 - Math.pow(0.01, 1 / totalFrames);
     this.fadeAlpha = Math.min(0.2, Math.max(0.001, this.fadeAlpha)); // Clamp to safe range
 
-    // Cell recycling happens at traceLifetime (in ms)
-    this.fadeTime = this.traceLifetime * 1000;
+    // Cell recycling happens when faded to 40% opacity
+    // Calculate time to reach 40% opacity: 0.4 = (1 - fadeAlpha)^(60*t)
+    // t = ln(0.4) / (60 * ln(1 - fadeAlpha))
+    var timeToFortyPercent = Math.log(0.4) / (60 * Math.log(1 - this.fadeAlpha));
+    this.fadeTime = timeToFortyPercent * 1000; // Convert to milliseconds
 
     this.lineWidth = options.lineWidth || 120; // Line width - thicker than grid, overlapping
     this.drawCounter = 0;
