@@ -197,7 +197,7 @@ var CircuitBoard = function(options) {
     this.animationId = null;
     this.stepDelay = options.stepDelay !== undefined ? options.stepDelay : 10; // Milliseconds between steps - default 10ms
     this.lastStepTime = 0;
-    this.spawnDelay = options.spawnDelay !== undefined ? options.spawnDelay : 0; // Milliseconds between spawning new cars - default 0ms
+    this.spawnDelay = options.spawnDelay !== undefined ? options.spawnDelay : 100; // Milliseconds between spawning new cars - default 100ms
     this.lastSpawnTime = 0;
     this.theme = document.documentElement.getAttribute('data-theme') || 'dark';
     this.lastCanvasWidth = 0;
@@ -216,10 +216,15 @@ var CircuitBoard = function(options) {
 CircuitBoard.prototype.init = function() {
     this.setup();
 
-    // Spawn initial cars
-    for (var i = 0; i < this.maxCars; i++) {
-        this.spawnCar();
+    // Spawn initial cars with delay between each
+    // If spawnDelay is 0, spawn all immediately
+    if (this.spawnDelay === 0) {
+        for (var i = 0; i < this.maxCars; i++) {
+            this.spawnCar();
+        }
     }
+    // Otherwise, let the animate loop handle spawning with delays
+
     this.animate();
 };
 
@@ -435,10 +440,17 @@ CircuitBoard.prototype.onResize = function() {
         self.animationComplete = false;
         self.finalDotsDrawn = false;
 
+        // Reset spawn time so delays work correctly
+        self.lastSpawnTime = 0;
+
         // Spawn new cars with current settings
-        for (var i = 0; i < self.maxCars; i++) {
-            self.spawnCar();
+        // If spawnDelay is 0, spawn all immediately
+        if (self.spawnDelay === 0) {
+            for (var i = 0; i < self.maxCars; i++) {
+                self.spawnCar();
+            }
         }
+        // Otherwise, let the animate loop handle spawning with delays
     }, 500); // Longer debounce to avoid scroll triggers
 };
 
