@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Circuit Board Animation Demo</title>
+    <title>Neon Growth</title>
     <style>
         * {
             margin: 0;
@@ -21,20 +21,21 @@
 
         .controls {
             position: fixed;
-            top: 20px;
+            top: 60px;
             right: 20px;
             z-index: 1000;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(0, 0, 0, 0.85);
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
             min-width: 200px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .controls h3 {
             margin: 0 0 15px 0;
             font-size: 14px;
-            color: #333;
+            color: rgba(255, 255, 255, 0.9);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -46,7 +47,7 @@
         .control-group label {
             display: block;
             font-size: 12px;
-            color: #666;
+            color: rgba(255, 255, 255, 0.7);
             margin-bottom: 5px;
         }
 
@@ -57,7 +58,7 @@
         .control-group .value {
             display: inline-block;
             font-size: 12px;
-            color: #333;
+            color: rgba(255, 255, 255, 0.9);
             font-weight: 600;
             margin-left: 5px;
         }
@@ -65,9 +66,9 @@
         button {
             width: 100%;
             padding: 8px;
-            background: #0077cc;
-            color: white;
-            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
@@ -75,7 +76,8 @@
         }
 
         button:hover {
-            background: #005fa3;
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
         }
 
         .stats {
@@ -98,22 +100,23 @@
         .toggle-ui {
             position: fixed;
             top: 20px;
-            left: 20px;
+            right: 20px;
             z-index: 1001;
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.85);
             padding: 10px 15px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.3);
-            box-shadow: none;
+            color: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             transition: all 0.2s ease;
         }
 
         .toggle-ui:hover {
-            background: rgba(255, 255, 255, 0.9);
-            color: #333;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            background: rgba(0, 0, 0, 0.9);
+            color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(255, 255, 255, 0.3);
         }
 
         .hidden {
@@ -146,9 +149,17 @@
         <div class="control-group">
             <label>
                 Trace Lifetime (sec)
-                <span class="value" id="trace-lifetime-value">10.0</span>
+                <span class="value" id="trace-lifetime-value">2.0</span>
             </label>
-            <input type="range" id="trace-lifetime" min="0.5" max="10" value="10.0" step="0.5">
+            <input type="range" id="trace-lifetime" min="0.5" max="10" value="2.0" step="0.5">
+        </div>
+
+        <div class="control-group">
+            <label>
+                Fade Duration (sec)
+                <span class="value" id="fade-duration-value">1.0</span>
+            </label>
+            <input type="range" id="fade-duration" min="0.1" max="5" value="1.0" step="0.1">
         </div>
 
         <div class="control-group">
@@ -183,12 +194,6 @@
             <input type="range" id="mutation-rate" min="0" max="50" value="10" step="5">
         </div>
 
-        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-            <h4 style="font-size: 12px; margin-bottom: 10px; color: #666;">Presets</h4>
-            <button id="preset-sparse" style="margin-bottom: 5px;">Sparse (5 cars, 100px)</button>
-            <button id="preset-dense" style="margin-bottom: 5px;">Dense (10 cars, 50px)</button>
-        </div>
-
         <button id="reset">Reset Animation</button>
     </div>
 
@@ -203,6 +208,7 @@
         const gridSlider = document.getElementById('grid');
         const carsSlider = document.getElementById('cars');
         const traceLifetimeSlider = document.getElementById('trace-lifetime');
+        const fadeDurationSlider = document.getElementById('fade-duration');
         const widthSlider = document.getElementById('width');
         const delaySlider = document.getElementById('delay');
         const spawnDelaySlider = document.getElementById('spawn-delay');
@@ -219,6 +225,7 @@
                         hexSize: parseInt(gridSlider.value),
                         maxCars: parseInt(carsSlider.value),
                         traceLifetime: parseFloat(traceLifetimeSlider.value),
+                        fadeDuration: parseFloat(fadeDurationSlider.value),
                         lineWidth: parseFloat(widthSlider.value),
                         stepDelay: parseInt(delaySlider.value),
                         spawnDelay: parseInt(spawnDelaySlider.value),
@@ -239,15 +246,14 @@
         traceLifetimeSlider.addEventListener('input', function() {
             document.getElementById('trace-lifetime-value').textContent = this.value;
             if (window.circuitBoardInstance) {
-                var lifetime = parseFloat(this.value);
-                window.circuitBoardInstance.traceLifetime = lifetime;
-                // Recalculate fadeAlpha and fadeTime based on new lifetime
-                var totalFrames = 60 * lifetime;
-                var fadeAlpha = 1 - Math.pow(0.01, 1 / totalFrames);
-                window.circuitBoardInstance.fadeAlpha = Math.min(0.2, Math.max(0.001, fadeAlpha));
-                // Cell recycling at 40% opacity
-                var timeToFortyPercent = Math.log(0.4) / (60 * Math.log(1 - fadeAlpha));
-                window.circuitBoardInstance.fadeTime = timeToFortyPercent * 1000;
+                window.circuitBoardInstance.traceLifetime = parseFloat(this.value);
+            }
+        });
+
+        fadeDurationSlider.addEventListener('input', function() {
+            document.getElementById('fade-duration-value').textContent = this.value;
+            if (window.circuitBoardInstance) {
+                window.circuitBoardInstance.fadeDuration = parseFloat(this.value);
             }
         });
 
@@ -261,6 +267,7 @@
                         hexSize: parseInt(gridSlider.value),
                         maxCars: parseInt(carsSlider.value),
                         traceLifetime: parseFloat(traceLifetimeSlider.value),
+                        fadeDuration: parseFloat(fadeDurationSlider.value),
                         lineWidth: parseFloat(widthSlider.value),
                         stepDelay: parseInt(delaySlider.value),
                         spawnDelay: parseInt(spawnDelaySlider.value),
@@ -301,49 +308,13 @@
                     hexSize: parseInt(gridSlider.value),
                     maxCars: parseInt(carsSlider.value),
                     traceLifetime: parseFloat(traceLifetimeSlider.value),
+                    fadeDuration: parseFloat(fadeDurationSlider.value),
                     lineWidth: parseFloat(widthSlider.value),
                     stepDelay: parseInt(delaySlider.value),
                     spawnDelay: parseInt(spawnDelaySlider.value)
                 });
                 window.circuitBoardInstance.theme = 'light';
             }, 100);
-        });
-
-        // Preset buttons - layer on top without clearing
-        function applyPresetLayer(hexSize, maxCars, lineWidth) {
-            gridSlider.value = hexSize;
-            carsSlider.value = maxCars;
-            widthSlider.value = lineWidth;
-            document.getElementById('grid-value').textContent = hexSize;
-            document.getElementById('cars-value').textContent = maxCars;
-            document.getElementById('width-value').textContent = lineWidth;
-
-            if (window.circuitBoardInstance) {
-                // Keep existing canvas and drawings - just change settings
-                window.circuitBoardInstance.hexSize = hexSize;
-                window.circuitBoardInstance.maxCars = maxCars;
-                window.circuitBoardInstance.lineWidth = lineWidth;
-
-                // Clear cars and reset state but keep canvas drawings
-                window.circuitBoardInstance.cars = [];
-                window.circuitBoardInstance.occupiedCells = {};
-                window.circuitBoardInstance.allLines = [];
-                window.circuitBoardInstance.animationComplete = false;
-                window.circuitBoardInstance.finalDotsDrawn = false;
-
-                // Spawn new cars with new settings
-                for (var i = 0; i < maxCars; i++) {
-                    window.circuitBoardInstance.spawnCar();
-                }
-            }
-        }
-
-        document.getElementById('preset-sparse').addEventListener('click', function() {
-            applyPresetLayer(100, 5, 30);
-        });
-
-        document.getElementById('preset-dense').addEventListener('click', function() {
-            applyPresetLayer(50, 10, 15);
         });
 
         // Toggle UI visibility
@@ -370,6 +341,7 @@
             hexSize: parseInt(gridSlider.value),
             maxCars: parseInt(carsSlider.value),
             traceLifetime: parseFloat(traceLifetimeSlider.value),
+            fadeDuration: parseFloat(fadeDurationSlider.value),
             lineWidth: parseFloat(widthSlider.value),
             stepDelay: parseInt(delaySlider.value),
             spawnDelay: parseInt(spawnDelaySlider.value),

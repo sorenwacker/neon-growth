@@ -186,21 +186,11 @@ var CircuitBoard = function(options) {
     // Evolution parameters
     this.mutationRate = options.mutationRate !== undefined ? options.mutationRate : 0.1; // 10% chance of random strategy
 
-    // Trace lifetime in seconds - controls both fading and cell recycling
-    this.traceLifetime = options.traceLifetime !== undefined ? options.traceLifetime : 10.0; // Default 10 seconds
+    // Trace lifetime in seconds - how long trace stays at full brightness after car dies
+    this.traceLifetime = options.traceLifetime !== undefined ? options.traceLifetime : 2.0; // Default 2 seconds
 
-    // Calculate fadeAlpha to achieve visual fade over traceLifetime
-    // At 60fps, we need: (1 - fadeAlpha)^(60 * traceLifetime) ≈ 0.01 (fade to ~1%)
-    // Solving: fadeAlpha = 1 - 0.01^(1/(60 * traceLifetime))
-    var totalFrames = 60 * this.traceLifetime;
-    this.fadeAlpha = 1 - Math.pow(0.01, 1 / totalFrames);
-    this.fadeAlpha = Math.min(0.2, Math.max(0.001, this.fadeAlpha));
-
-    // Cell recycling happens when faded to 40% opacity
-    // Calculate time to reach 40% opacity: 0.4 = (1 - fadeAlpha)^(60*t)
-    // t = ln(0.4) / (60 * ln(1 - fadeAlpha))
-    var timeToFortyPercent = Math.log(0.4) / (60 * Math.log(1 - this.fadeAlpha));
-    this.fadeTime = timeToFortyPercent * 1000; // Convert to milliseconds
+    // Fade duration in seconds - how long it takes to fade from full brightness to black
+    this.fadeDuration = options.fadeDuration !== undefined ? options.fadeDuration : 1.0; // Default 1 second
 
     this.lineWidth = options.lineWidth !== undefined ? options.lineWidth : 10; // Line width - default 10px
     this.drawCounter = 0;
@@ -484,63 +474,67 @@ CircuitBoard.prototype.draw = function() {
     this.ctx.fillStyle = 'rgb(0, 0, 0)';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Redraw all car paths as continuous polylines to avoid overlapping segments
+    // Draw all lines with temporal color gradient (each segment has its own color based on age)
     this.ctx.lineWidth = this.lineWidth;
     this.ctx.lineCap = 'round'; // Round caps for smooth endpoints
     this.ctx.lineJoin = 'round'; // Round joins for smooth corners
 
-    if (!this.carPaths) this.carPaths = {};
+    // Group consecutive segments by car to draw as continuous paths
+    var carSegments = {};
+    for (var i = 0; i < this.allLines.length; i++) {
+        var line = this.allLines[i];
+        if (line.carId !== undefined) {
+            if (!carSegments[line.carId]) {
+                carSegments[line.carId] = [];
+            }
+            carSegments[line.carId].push(line);
+        }
+    }
 
-    // Draw each car's path as a continuous line
-    for (var carId in this.carPaths) {
-        if (this.carPaths.hasOwnProperty(carId)) {
-            var pathData = this.carPaths[carId];
+    // Draw each car's segments as a continuous path with gradient colors
+    for (var carId in carSegments) {
+        if (carSegments.hasOwnProperty(carId)) {
+            var segments = carSegments[carId];
             var numCarId = parseInt(carId);
-
-            // Determine color and opacity
             var isAlive = aliveCarIds[numCarId];
 
-            // Use the first line's color for this car (approximate)
-            var baseColor = null;
-            for (var i = 0; i < this.allLines.length; i++) {
-                if (this.allLines[i].carId === numCarId) {
-                    baseColor = this.allLines[i].baseColor;
-                    break;
-                }
-            }
-
-            if (!baseColor) continue;
-
-            // Calculate drifted color
-            var driftedColor = this.getDriftedColor(baseColor, pathData.startTime);
-
-            var opacity = 1.0;
+            // Calculate darkness factor for this car (fade to black instead of transparent)
+            var darknessFactor = 1.0; // 1.0 = full brightness, 0.0 = black
             if (!isAlive) {
                 var deathTime = this.deadCarIds[numCarId];
                 if (deathTime !== undefined) {
                     var timeSinceDeath = currentTime - deathTime;
-                    var fadeProgress = Math.min(1, timeSinceDeath / (this.traceLifetime * 1000));
-                    opacity = 1 - fadeProgress;
+                    var lifetimeMs = this.traceLifetime * 1000;
+
+                    // Stay at full brightness during lifetime
+                    if (timeSinceDeath <= lifetimeMs) {
+                        darknessFactor = 1.0; // Full brightness during lifetime
+                    } else {
+                        // After lifetime ends, start fading over fadeDuration
+                        var fadeStartTime = timeSinceDeath - lifetimeMs;
+                        var fadeDurationMs = this.fadeDuration * 1000;
+                        var fadeProgress = Math.min(1, fadeStartTime / fadeDurationMs);
+                        darknessFactor = 1 - fadeProgress; // Fade brightness from 1 to 0
+                    }
                 }
             }
 
-            // Parse color and apply opacity
-            var match = driftedColor.match(/hsla?\((\d+),\s*(\d+)%,\s*(\d+)%/);
-            if (match) {
-                var strokeStyle = 'hsla(' + match[1] + ', ' + match[2] + '%, ' + match[3] + '%, ' + opacity.toFixed(2) + ')';
-            } else {
-                var strokeStyle = driftedColor;
-            }
-
-            // Draw the continuous path
-            this.ctx.strokeStyle = strokeStyle;
+            // Draw segments with individual colors (recalculated each frame for flowing effect)
             this.ctx.beginPath();
-            var points = pathData.points;
-            if (points.length >= 2) {
-                this.ctx.moveTo(points[0], points[1]);
-                for (var i = 2; i < points.length; i += 2) {
-                    this.ctx.lineTo(points[i], points[i + 1]);
-                }
+            for (var i = 0; i < segments.length; i++) {
+                var segment = segments[i];
+
+                // Calculate color freshly each frame (includes all time-dependent effects)
+                var color = this.getSegmentColor(segment, this.canvas.width, this.canvas.height);
+
+                // Reduce lightness as car fades (darker, not transparent)
+                var fadedLight = Math.round(color.light * darknessFactor);
+                var strokeStyle = 'hsl(' + color.hue + ', ' + color.sat + '%, ' + fadedLight + '%)';
+
+                this.ctx.strokeStyle = strokeStyle;
+                this.ctx.beginPath();
+                this.ctx.moveTo(segment.x1, segment.y1);
+                this.ctx.lineTo(segment.x2, segment.y2);
                 this.ctx.stroke();
             }
         }
@@ -700,21 +694,48 @@ CircuitBoard.prototype.getHexKey = function(x, y) {
     return Math.round(x) + ',' + Math.round(y);
 };
 
-CircuitBoard.prototype.getDriftedColor = function(baseColor, timestamp) {
-    // Parse the base color (format: "hsla(hue, sat%, light%, alpha)")
-    var match = baseColor.match(/hsla?\((\d+),\s*(\d+)%,\s*(\d+)%/);
-    if (!match) return baseColor;
+CircuitBoard.prototype.getSegmentColor = function(segment, canvasWidth, canvasHeight) {
+    // Recalculate base color from segment position (like Car.getColor does)
+    var xRatio = Math.max(0, Math.min(1, segment.x1 / canvasWidth));
+    var yRatio = Math.max(0, Math.min(1, segment.y1 / canvasHeight));
 
-    var baseHue = parseInt(match[1]);
-    var sat = parseInt(match[2]);
-    var light = parseInt(match[3]);
+    // Global time-based cycling
+    var globalTime = (Date.now() % 10000) / 10000;
+    var globalHueShift = Math.sin(globalTime * Math.PI * 2) * 20;
 
-    // Calculate slow time-based hue drift that continues regardless of car state
-    var age = (Date.now() - timestamp) / 1000; // Age in seconds
-    var drift = Math.sin(age * 0.1) * 20; // ±20° drift, slow (full cycle ~63 seconds)
-    var newHue = (baseHue + drift + 360) % 360;
+    // Car's lifetime-based shift
+    var lifetime = (Date.now() - segment.birthTime) / 1000;
+    var lifetimeHueShift = Math.sin(lifetime * 0.5) * 15;
 
-    return 'hsla(' + ~~newHue + ', ' + sat + '%, ' + light + '%, 1)';
+    // Base color calculation (same as Car.getColor)
+    var baseHue = segment.hueOffset + (xRatio * 60);
+    var hue = (baseHue + globalHueShift + lifetimeHueShift) % 360;
+    var sat = 85 + yRatio * 15 + Math.cos(globalTime * Math.PI * 2) * 5;
+    var light = 45 + yRatio * 10 + Math.sin(globalTime * Math.PI * 4) * 5;
+
+    // Additional drift components
+    var currentTime = Date.now() / 1000;
+
+    // Global drift (all traces together)
+    var globalDrift = Math.sin(currentTime * 0.05) * 15;
+
+    // Per-segment age drift
+    var age = (Date.now() - segment.timestamp) / 1000;
+    var ageDrift = Math.sin(age * 0.1) * 20;
+
+    // Flowing effect: colors propagate along the path
+    var flowingDrift = 0;
+    if (segment.segmentIndex !== undefined) {
+        var flowSpeed = 2.0;
+        var flowPhase = (segment.segmentIndex * 0.5) + (currentTime * flowSpeed);
+        flowingDrift = Math.sin(flowPhase) * 50;
+    }
+
+    // Combine all drifts
+    var totalDrift = globalDrift + ageDrift + flowingDrift;
+    hue = (hue + totalDrift + 360) % 360;
+
+    return {hue: ~~hue, sat: ~~sat, light: ~~light};
 };
 
 CircuitBoard.prototype.calculateMove = function(car) {
@@ -869,15 +890,18 @@ CircuitBoard.prototype.executeMove = function(car, move) {
     this.ctx.lineTo(car.x, car.y);
     this.ctx.stroke();
 
-    // Record line with owner and timestamp for color drift
+    // Record line with owner, timestamp, and position along path for color drift
+    // Store the car's base hue offset (doesn't change) instead of computed color
     var newSegment = {
         x1: oldX,
         y1: oldY,
         x2: car.x,
         y2: car.y,
         carId: car.id,
-        baseColor: car.color,
-        timestamp: Date.now() // Track when line was drawn for color drift
+        hueOffset: car.hueOffset, // Store car's unique hue offset
+        birthTime: car.birthTime, // Store car's birth time for color calculation
+        timestamp: Date.now(), // Track when line was drawn
+        segmentIndex: this.allLines.filter(function(l) { return l.carId === car.id; }).length // Position in sequence
     };
     this.allLines.push(newSegment);
 
@@ -944,10 +968,8 @@ CircuitBoard.prototype.clearFadedCells = function(currentTime, aliveCarIds) {
     var keysToRemove = [];
     var deadCarIdsToCleanup = new Set();
 
-    // Calculate which dead cars have reached 100% transparency
-    // At 60fps: opacity = (1 - fadeAlpha)^frames
-    // We want to find when opacity ≈ 0.01 (essentially invisible)
-    var fullFadeTime = this.traceLifetime * 1000; // Full trace lifetime in ms
+    // Total time before cleanup = lifetime (full brightness) + fade duration
+    var totalTimeBeforeCleanup = (this.traceLifetime + this.fadeDuration) * 1000; // in ms
 
     for (var key in this.cellTimestamps) {
         if (this.cellTimestamps.hasOwnProperty(key)) {
@@ -959,8 +981,8 @@ CircuitBoard.prototype.clearFadedCells = function(currentTime, aliveCarIds) {
                 var deathTime = this.deadCarIds[ownerId];
                 if (deathTime !== undefined) {
                     var timeSinceDeath = currentTime - deathTime;
-                    // Remove when fully faded (after full trace lifetime)
-                    if (timeSinceDeath > fullFadeTime) {
+                    // Remove when fully faded (after lifetime + fade duration)
+                    if (timeSinceDeath > totalTimeBeforeCleanup) {
                         keysToRemove.push(key);
                         deadCarIdsToCleanup.add(ownerId);
                     }
