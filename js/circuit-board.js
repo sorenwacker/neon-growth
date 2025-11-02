@@ -186,10 +186,9 @@ var CircuitBoard = function(options) {
     // Evolution parameters
     this.mutationRate = options.mutationRate !== undefined ? options.mutationRate : 0.1; // 10% chance of random strategy
 
-    // Trace lifetime in seconds - how long trace stays at full brightness after car dies
+    // Trace lifetime modes
+    this.infiniteLifetime = options.infiniteLifetime !== undefined ? options.infiniteLifetime : false; // Default: fading enabled
     this.traceLifetime = options.traceLifetime !== undefined ? options.traceLifetime : 2.0; // Default 2 seconds
-
-    // Fade duration in seconds - how long it takes to fade from full brightness to black
     this.fadeDuration = options.fadeDuration !== undefined ? options.fadeDuration : 1.0; // Default 1 second
 
     this.lineWidth = options.lineWidth !== undefined ? options.lineWidth : 10; // Line width - default 10px
@@ -510,9 +509,11 @@ CircuitBoard.prototype.draw = function() {
             var numCarId = parseInt(carId);
             var isAlive = aliveCarIds[numCarId];
 
-            // Calculate darkness factor for this car (fade to black instead of transparent)
+            // Calculate darkness factor based on mode
             var darknessFactor = 1.0; // 1.0 = full brightness, 0.0 = black
-            if (!isAlive) {
+
+            if (!this.infiniteLifetime && !isAlive) {
+                // Fading mode - fade dead car traces
                 var deathTime = this.deadCarIds[numCarId];
                 if (deathTime !== undefined) {
                     var timeSinceDeath = currentTime - deathTime;
@@ -530,6 +531,7 @@ CircuitBoard.prototype.draw = function() {
                     }
                 }
             }
+            // Infinite lifetime mode - all traces stay at full brightness (darknessFactor = 1.0)
 
             // Draw segments with individual colors (recalculated each frame for flowing effect)
             this.ctx.beginPath();
@@ -647,7 +649,8 @@ CircuitBoard.prototype.draw = function() {
             }
         }
 
-        // PHASE 4: Handle stuck cars
+        // PHASE 4: Handle stuck cars - they become permanent, don't die
+        var stuckCars = [];
         for (var i = this.cars.length - 1; i >= 0; i--) {
             var car = this.cars[i];
 
@@ -661,11 +664,31 @@ CircuitBoard.prototype.draw = function() {
                     this.strategyFitness[car.strategy].count += 1;
                 }
 
-                // Mark car as dead - its cells can now start fading
+                // Mark as dead but keep trace permanently
                 this.deadCarIds[car.id] = Date.now();
+                stuckCars.push(car);
 
-                // Remove stuck car - new car will spawn with delay
+                // Remove from active cars
                 this.cars.splice(i, 1);
+            }
+        }
+
+        // Infinite lifetime mode: remove oldest dead car when too many exist
+        if (this.infiniteLifetime && stuckCars.length > 0 && Object.keys(this.deadCarIds).length > this.maxCars) {
+            // Find oldest dead car by looking at death timestamps
+            var oldestCarId = null;
+            var oldestDeathTime = Infinity;
+
+            for (var carId in this.deadCarIds) {
+                if (this.deadCarIds[carId] < oldestDeathTime) {
+                    oldestDeathTime = this.deadCarIds[carId];
+                    oldestCarId = parseInt(carId);
+                }
+            }
+
+            if (oldestCarId !== null) {
+                // Remove oldest dead car's traces and cells
+                this.removeCarTraces(oldestCarId);
             }
         }
 
@@ -967,7 +990,48 @@ CircuitBoard.prototype.scoreMove = function(move, car) {
     return 100; // All valid moves are acceptable
 };
 
+CircuitBoard.prototype.removeCarTraces = function(carId) {
+    // Remove all traces and cells belonging to this car
+    var keysToRemove = [];
+
+    // Find all cells owned by this car
+    for (var key in this.cellOwners) {
+        if (this.cellOwners.hasOwnProperty(key) && this.cellOwners[key] === carId) {
+            keysToRemove.push(key);
+        }
+    }
+
+    // Remove cells
+    for (var i = 0; i < keysToRemove.length; i++) {
+        delete this.occupiedCells[keysToRemove[i]];
+        delete this.cellTimestamps[keysToRemove[i]];
+        delete this.cellOwners[keysToRemove[i]];
+    }
+
+    // Remove lines
+    var newLines = [];
+    for (var i = 0; i < this.allLines.length; i++) {
+        if (this.allLines[i].carId !== carId) {
+            newLines.push(this.allLines[i]);
+        }
+    }
+    this.allLines = newLines;
+
+    // Remove from dead car tracking
+    delete this.deadCarIds[carId];
+
+    // Clean up path if exists
+    if (this.carPaths) {
+        delete this.carPaths[carId];
+    }
+};
+
 CircuitBoard.prototype.clearFadedCells = function(currentTime, aliveCarIds) {
+    // Only run in fading mode
+    if (this.infiniteLifetime) {
+        return; // Infinite mode - no automatic fading
+    }
+
     // Only run cleanup every 10 frames for better performance
     if (!this.cleanupFrameCounter) this.cleanupFrameCounter = 0;
     this.cleanupFrameCounter++;

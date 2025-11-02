@@ -148,6 +148,13 @@
 
         <div class="control-group">
             <label>
+                <input type="checkbox" id="infinite-lifetime" style="width: auto; margin-right: 5px;">
+                Infinite Lifetime
+            </label>
+        </div>
+
+        <div class="control-group">
+            <label>
                 Trace Lifetime (sec)
                 <span class="value" id="trace-lifetime-value">2.0</span>
             </label>
@@ -207,6 +214,7 @@
         // Controls
         const gridSlider = document.getElementById('grid');
         const carsSlider = document.getElementById('cars');
+        const infiniteLifetimeCheckbox = document.getElementById('infinite-lifetime');
         const traceLifetimeSlider = document.getElementById('trace-lifetime');
         const fadeDurationSlider = document.getElementById('fade-duration');
         const widthSlider = document.getElementById('width');
@@ -224,6 +232,7 @@
                     window.circuitBoardInstance = new CircuitBoard({
                         hexSize: parseInt(gridSlider.value),
                         maxCars: parseInt(carsSlider.value),
+                        infiniteLifetime: infiniteLifetimeCheckbox.checked,
                         traceLifetime: parseFloat(traceLifetimeSlider.value),
                         fadeDuration: parseFloat(fadeDurationSlider.value),
                         lineWidth: parseFloat(widthSlider.value),
@@ -240,6 +249,12 @@
             document.getElementById('cars-value').textContent = this.value;
             if (window.circuitBoardInstance) {
                 window.circuitBoardInstance.maxCars = parseInt(this.value);
+            }
+        });
+
+        infiniteLifetimeCheckbox.addEventListener('change', function() {
+            if (window.circuitBoardInstance) {
+                window.circuitBoardInstance.infiniteLifetime = this.checked;
             }
         });
 
@@ -266,6 +281,7 @@
                     window.circuitBoardInstance = new CircuitBoard({
                         hexSize: parseInt(gridSlider.value),
                         maxCars: parseInt(carsSlider.value),
+                        infiniteLifetime: infiniteLifetimeCheckbox.checked,
                         traceLifetime: parseFloat(traceLifetimeSlider.value),
                         fadeDuration: parseFloat(fadeDurationSlider.value),
                         lineWidth: parseFloat(widthSlider.value),
@@ -307,11 +323,13 @@
                 window.circuitBoardInstance = new CircuitBoard({
                     hexSize: parseInt(gridSlider.value),
                     maxCars: parseInt(carsSlider.value),
+                    infiniteLifetime: infiniteLifetimeCheckbox.checked,
                     traceLifetime: parseFloat(traceLifetimeSlider.value),
                     fadeDuration: parseFloat(fadeDurationSlider.value),
                     lineWidth: parseFloat(widthSlider.value),
                     stepDelay: parseInt(delaySlider.value),
-                    spawnDelay: parseInt(spawnDelaySlider.value)
+                    spawnDelay: parseInt(spawnDelaySlider.value),
+                    mutationRate: parseInt(mutationRateSlider.value) / 100
                 });
                 window.circuitBoardInstance.theme = 'light';
             }, 100);
@@ -340,8 +358,6 @@
         window.circuitBoardInstance = new CircuitBoard({
             hexSize: parseInt(gridSlider.value),
             maxCars: parseInt(carsSlider.value),
-            traceLifetime: parseFloat(traceLifetimeSlider.value),
-            fadeDuration: parseFloat(fadeDurationSlider.value),
             lineWidth: parseFloat(widthSlider.value),
             stepDelay: parseInt(delaySlider.value),
             spawnDelay: parseInt(spawnDelaySlider.value),
