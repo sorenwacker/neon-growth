@@ -4,7 +4,7 @@
 //
 // Car model - moves in discrete steps on hexagonal grid
 //
-var Car = function(x, y, canvasWidth, canvasHeight, hexSize, phase, strategy) {
+var Car = function(x, y, canvasWidth, canvasHeight, hexSize, phase, strategy, carId) {
     this.x = x;
     this.y = y;
     this.hexSize = hexSize;
@@ -12,6 +12,7 @@ var Car = function(x, y, canvasWidth, canvasHeight, hexSize, phase, strategy) {
     this.canvasHeight = canvasHeight;
     this.phase = phase || 1;
     this.stuck = false;
+    this.id = carId; // Unique ID for this car
     this.birthTime = Date.now(); // Track when this car was born
     this.hueOffset = Math.random() * 360; // Each car gets unique base hue
     this.color = this.getColor();
@@ -122,7 +123,9 @@ Car.prototype.tryDirection = function(dirIndex, occupiedCells, canvasWidth, canv
     }
 
     // Check if this line would cross any existing lines
-    for (var i = 0; i < allLines.length; i++) {
+    // Only check recent lines for performance (spatial locality)
+    var checkStart = Math.max(0, allLines.length - 100); // Only check last 100 lines
+    for (var i = checkStart; i < allLines.length; i++) {
         var line = allLines[i];
         if (this.linesIntersect(this.x, this.y, nextX, nextY, line.x1, line.y1, line.x2, line.y2)) {
             return null; // Would cross existing line
@@ -165,9 +168,12 @@ var CircuitBoard = function(options) {
     this.hexSize = options.hexSize || 100; // Hexagonal step size in pixels
     this.occupiedCells = {}; // Track which hex positions are occupied
     this.cellTimestamps = {}; // Track when each cell was drawn
+    this.cellOwners = {}; // Track which car owns each cell (by car ID)
     this.allLines = []; // Track all drawn line segments for collision detection
     this.cars = []; // Active cars
     this.maxCars = options.maxCars || 2; // Maximum simultaneous cars
+    this.nextCarId = 0; // Unique ID counter for cars
+    this.deadCarIds = {}; // Track IDs of cars that have died (key = carId, value = death timestamp)
 
     // Strategy fitness tracking - survival of the fittest
     this.strategyFitness = {
@@ -181,14 +187,14 @@ var CircuitBoard = function(options) {
     this.mutationRate = options.mutationRate !== undefined ? options.mutationRate : 0.1; // 10% chance of random strategy
 
     // Trace lifetime in seconds - controls both fading and cell recycling
-    this.traceLifetime = options.traceLifetime !== undefined ? options.traceLifetime : 2.0; // Default 2 seconds
+    this.traceLifetime = options.traceLifetime !== undefined ? options.traceLifetime : 10.0; // Default 10 seconds
 
     // Calculate fadeAlpha to achieve visual fade over traceLifetime
     // At 60fps, we need: (1 - fadeAlpha)^(60 * traceLifetime) ≈ 0.01 (fade to ~1%)
     // Solving: fadeAlpha = 1 - 0.01^(1/(60 * traceLifetime))
     var totalFrames = 60 * this.traceLifetime;
     this.fadeAlpha = 1 - Math.pow(0.01, 1 / totalFrames);
-    this.fadeAlpha = Math.min(0.2, Math.max(0.001, this.fadeAlpha)); // Clamp to safe range
+    this.fadeAlpha = Math.min(0.2, Math.max(0.001, this.fadeAlpha));
 
     // Cell recycling happens when faded to 40% opacity
     // Calculate time to reach 40% opacity: 0.4 = (1 - fadeAlpha)^(60*t)
@@ -196,12 +202,12 @@ var CircuitBoard = function(options) {
     var timeToFortyPercent = Math.log(0.4) / (60 * Math.log(1 - this.fadeAlpha));
     this.fadeTime = timeToFortyPercent * 1000; // Convert to milliseconds
 
-    this.lineWidth = options.lineWidth || 120; // Line width - thicker than grid, overlapping
+    this.lineWidth = options.lineWidth !== undefined ? options.lineWidth : 10; // Line width - default 10px
     this.drawCounter = 0;
     this.animationId = null;
-    this.stepDelay = options.stepDelay || 25; // Milliseconds between steps - very fast animation
+    this.stepDelay = options.stepDelay !== undefined ? options.stepDelay : 10; // Milliseconds between steps - default 10ms
     this.lastStepTime = 0;
-    this.spawnDelay = options.spawnDelay || 500; // Milliseconds between spawning new cars
+    this.spawnDelay = options.spawnDelay !== undefined ? options.spawnDelay : 0; // Milliseconds between spawning new cars - default 0ms
     this.lastSpawnTime = 0;
     this.theme = document.documentElement.getAttribute('data-theme') || 'dark';
     this.lastCanvasWidth = 0;
@@ -345,18 +351,14 @@ CircuitBoard.prototype.spawnCar = function() {
         // CRITICAL: Use exact same key generation as everywhere else
         var key = this.getHexKey(gridX, gridY);
         if (!this.occupiedCells[key]) {
-            // Spawn with fitness-selected strategy
-            var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, null, selectedStrategy);
+            // Spawn with fitness-selected strategy and unique ID
+            var carId = this.nextCarId++;
+            var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, null, selectedStrategy, carId);
             car.prevX = gridX;
             car.prevY = gridY;
             this.occupiedCells[key] = (this.occupiedCells[key] || 0) + 1;
             this.cellTimestamps[key] = Date.now();
-
-            // Draw starting dot so there's no gap when the spiral begins
-            this.ctx.fillStyle = car.color;
-            this.ctx.beginPath();
-            this.ctx.arc(gridX, gridY, this.lineWidth / 2, 0, Math.PI * 2);
-            this.ctx.fill();
+            this.cellOwners[key] = carId; // Track that this car owns this cell
 
             this.cars.push(car);
             return true; // Successfully spawned
@@ -381,18 +383,14 @@ CircuitBoard.prototype.spawnCar = function() {
                 // CRITICAL: Use exact same key generation as everywhere else
                 var key = this.getHexKey(gridX, gridY);
                 if (!this.occupiedCells[key]) {
-                    // Found a free spot - spawn with fitness-selected strategy
-                    var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, null, selectedStrategy);
+                    // Found a free spot - spawn with fitness-selected strategy and unique ID
+                    var carId = this.nextCarId++;
+                    var car = new Car(gridX, gridY, this.canvas.width, this.canvas.height, this.hexSize, null, selectedStrategy, carId);
                     car.prevX = gridX;
                     car.prevY = gridY;
                     this.occupiedCells[key] = (this.occupiedCells[key] || 0) + 1;
                     this.cellTimestamps[key] = Date.now();
-
-                    // Draw starting dot so there's no gap when the spiral begins
-                    this.ctx.fillStyle = car.color;
-                    this.ctx.beginPath();
-                    this.ctx.arc(gridX, gridY, this.lineWidth / 2, 0, Math.PI * 2);
-                    this.ctx.fill();
+                    this.cellOwners[key] = carId; // Track that this car owns this cell
 
                     this.cars.push(car);
                     return true; // Successfully spawned
@@ -440,6 +438,9 @@ CircuitBoard.prototype.onResize = function() {
         // Restart animation completely - clear all state
         self.cars = [];
         self.occupiedCells = {};
+        self.cellTimestamps = {};
+        self.cellOwners = {};
+        self.deadCarIds = {};
         self.allLines = [];
         self.animationComplete = false;
         self.finalDotsDrawn = false;
@@ -472,14 +473,81 @@ CircuitBoard.prototype.draw = function() {
 
     var currentTime = Date.now();
 
-    // Fade effect for trace trails (only if fadeAlpha > 0)
-    if (this.fadeAlpha > 0) {
-        this.ctx.fillStyle = 'rgba(0, 0, 0, ' + this.fadeAlpha + ')';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // Clear faded cells so they can be reused
-        this.clearFadedCells(currentTime);
+    // Get set of alive car IDs for quick lookup
+    var aliveCarIds = {};
+    for (var i = 0; i < this.cars.length; i++) {
+        aliveCarIds[this.cars[i].id] = true;
     }
+
+    // Clear and redraw everything each frame to show proper fading
+    // Clear entire canvas
+    this.ctx.fillStyle = 'rgb(0, 0, 0)';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Redraw all car paths as continuous polylines to avoid overlapping segments
+    this.ctx.lineWidth = this.lineWidth;
+    this.ctx.lineCap = 'round'; // Round caps for smooth endpoints
+    this.ctx.lineJoin = 'round'; // Round joins for smooth corners
+
+    if (!this.carPaths) this.carPaths = {};
+
+    // Draw each car's path as a continuous line
+    for (var carId in this.carPaths) {
+        if (this.carPaths.hasOwnProperty(carId)) {
+            var pathData = this.carPaths[carId];
+            var numCarId = parseInt(carId);
+
+            // Determine color and opacity
+            var isAlive = aliveCarIds[numCarId];
+
+            // Use the first line's color for this car (approximate)
+            var baseColor = null;
+            for (var i = 0; i < this.allLines.length; i++) {
+                if (this.allLines[i].carId === numCarId) {
+                    baseColor = this.allLines[i].baseColor;
+                    break;
+                }
+            }
+
+            if (!baseColor) continue;
+
+            // Calculate drifted color
+            var driftedColor = this.getDriftedColor(baseColor, pathData.startTime);
+
+            var opacity = 1.0;
+            if (!isAlive) {
+                var deathTime = this.deadCarIds[numCarId];
+                if (deathTime !== undefined) {
+                    var timeSinceDeath = currentTime - deathTime;
+                    var fadeProgress = Math.min(1, timeSinceDeath / (this.traceLifetime * 1000));
+                    opacity = 1 - fadeProgress;
+                }
+            }
+
+            // Parse color and apply opacity
+            var match = driftedColor.match(/hsla?\((\d+),\s*(\d+)%,\s*(\d+)%/);
+            if (match) {
+                var strokeStyle = 'hsla(' + match[1] + ', ' + match[2] + '%, ' + match[3] + '%, ' + opacity.toFixed(2) + ')';
+            } else {
+                var strokeStyle = driftedColor;
+            }
+
+            // Draw the continuous path
+            this.ctx.strokeStyle = strokeStyle;
+            this.ctx.beginPath();
+            var points = pathData.points;
+            if (points.length >= 2) {
+                this.ctx.moveTo(points[0], points[1]);
+                for (var i = 2; i < points.length; i += 2) {
+                    this.ctx.lineTo(points[i], points[i + 1]);
+                }
+                this.ctx.stroke();
+            }
+        }
+    }
+
+    // Clear faded cells so they can be reused
+    this.clearFadedCells(currentTime, aliveCarIds);
 
     // Draw hexagonal grid - disabled
     // this.drawHexGrid();
@@ -578,12 +646,6 @@ CircuitBoard.prototype.draw = function() {
             var car = this.cars[i];
 
             if (car.stuck) {
-                // Draw a filled circle at stuck position before removing
-                this.ctx.fillStyle = car.color;
-                this.ctx.beginPath();
-                this.ctx.arc(car.x, car.y, this.lineWidth / 2, 0, Math.PI * 2);
-                this.ctx.fill();
-
                 // Record fitness: lifetime, distance, and cells visited
                 var lifetime = (Date.now() - car.birthTime) / 1000; // seconds
                 if (this.strategyFitness[car.strategy]) {
@@ -592,6 +654,9 @@ CircuitBoard.prototype.draw = function() {
                     this.strategyFitness[car.strategy].totalCells += car.cellsVisited;
                     this.strategyFitness[car.strategy].count += 1;
                 }
+
+                // Mark car as dead - its cells can now start fading
+                this.deadCarIds[car.id] = Date.now();
 
                 // Remove stuck car - new car will spawn with delay
                 this.cars.splice(i, 1);
@@ -633,6 +698,23 @@ CircuitBoard.prototype.drawHexGrid = function() {
 
 CircuitBoard.prototype.getHexKey = function(x, y) {
     return Math.round(x) + ',' + Math.round(y);
+};
+
+CircuitBoard.prototype.getDriftedColor = function(baseColor, timestamp) {
+    // Parse the base color (format: "hsla(hue, sat%, light%, alpha)")
+    var match = baseColor.match(/hsla?\((\d+),\s*(\d+)%,\s*(\d+)%/);
+    if (!match) return baseColor;
+
+    var baseHue = parseInt(match[1]);
+    var sat = parseInt(match[2]);
+    var light = parseInt(match[3]);
+
+    // Calculate slow time-based hue drift that continues regardless of car state
+    var age = (Date.now() - timestamp) / 1000; // Age in seconds
+    var drift = Math.sin(age * 0.1) * 20; // ±20° drift, slow (full cycle ~63 seconds)
+    var newHue = (baseHue + drift + 360) % 360;
+
+    return 'hsla(' + ~~newHue + ', ' + sat + '%, ' + light + '%, 1)';
 };
 
 CircuitBoard.prototype.calculateMove = function(car) {
@@ -746,6 +828,7 @@ CircuitBoard.prototype.executeMove = function(car, move) {
 
     this.occupiedCells[key] = (this.occupiedCells[key] || 0) + 1;
     this.cellTimestamps[key] = Date.now();
+    this.cellOwners[key] = car.id; // Track that this car owns this cell
 
     var oldX = car.x;
     var oldY = car.y;
@@ -786,13 +869,29 @@ CircuitBoard.prototype.executeMove = function(car, move) {
     this.ctx.lineTo(car.x, car.y);
     this.ctx.stroke();
 
-    // Record line
-    this.allLines.push({
+    // Record line with owner and timestamp for color drift
+    var newSegment = {
         x1: oldX,
         y1: oldY,
         x2: car.x,
-        y2: car.y
-    });
+        y2: car.y,
+        carId: car.id,
+        baseColor: car.color,
+        timestamp: Date.now() // Track when line was drawn for color drift
+    };
+    this.allLines.push(newSegment);
+
+    // Also track continuous path for this car
+    if (!this.carPaths) this.carPaths = {};
+    if (!this.carPaths[car.id]) {
+        this.carPaths[car.id] = {
+            points: [oldX, oldY],
+            carId: car.id,
+            startTime: Date.now()
+        };
+    }
+    // Add next point to path
+    this.carPaths[car.id].points.push(car.x, car.y);
 };
 
 
@@ -832,37 +931,70 @@ CircuitBoard.prototype.scoreMove = function(move, car) {
     return 100; // All valid moves are acceptable
 };
 
-CircuitBoard.prototype.clearFadedCells = function(currentTime) {
-    // Clear cells after fadeTime has passed
+CircuitBoard.prototype.clearFadedCells = function(currentTime, aliveCarIds) {
+    // Only run cleanup every 10 frames for better performance
+    if (!this.cleanupFrameCounter) this.cleanupFrameCounter = 0;
+    this.cleanupFrameCounter++;
+
+    if (this.cleanupFrameCounter % 10 !== 0) {
+        return; // Skip cleanup this frame
+    }
+
+    // Clear cells and lines when they reach 100% transparency (fully faded)
     var keysToRemove = [];
+    var deadCarIdsToCleanup = new Set();
+
+    // Calculate which dead cars have reached 100% transparency
+    // At 60fps: opacity = (1 - fadeAlpha)^frames
+    // We want to find when opacity ≈ 0.01 (essentially invisible)
+    var fullFadeTime = this.traceLifetime * 1000; // Full trace lifetime in ms
 
     for (var key in this.cellTimestamps) {
         if (this.cellTimestamps.hasOwnProperty(key)) {
-            var age = currentTime - this.cellTimestamps[key];
-            if (age > this.fadeTime) {
-                keysToRemove.push(key);
+            var ownerId = this.cellOwners[key];
+
+            // Only clear cells from dead cars
+            if (ownerId !== undefined && !aliveCarIds[ownerId]) {
+                // This cell belongs to a dead car - check if it's fully faded
+                var deathTime = this.deadCarIds[ownerId];
+                if (deathTime !== undefined) {
+                    var timeSinceDeath = currentTime - deathTime;
+                    // Remove when fully faded (after full trace lifetime)
+                    if (timeSinceDeath > fullFadeTime) {
+                        keysToRemove.push(key);
+                        deadCarIdsToCleanup.add(ownerId);
+                    }
+                }
             }
         }
     }
 
-    // Remove faded cells
+    // Remove fully faded cells
     for (var i = 0; i < keysToRemove.length; i++) {
         delete this.occupiedCells[keysToRemove[i]];
         delete this.cellTimestamps[keysToRemove[i]];
+        delete this.cellOwners[keysToRemove[i]];
     }
 
-    // Clear old lines
+    // Clear fully faded lines - only if we removed cells
     if (keysToRemove.length > 0) {
         var newLines = [];
         for (var i = 0; i < this.allLines.length; i++) {
             var line = this.allLines[i];
-            var key1 = this.getHexKey(line.x1, line.y1);
-            var key2 = this.getHexKey(line.x2, line.y2);
-            if (this.occupiedCells[key1] || this.occupiedCells[key2]) {
+            // Keep line if it's from an alive car or a dead car that hasn't fully faded
+            if (line.carId && !deadCarIdsToCleanup.has(line.carId)) {
                 newLines.push(line);
             }
         }
         this.allLines = newLines;
+
+        // Clean up dead car IDs and paths that have been fully processed
+        for (var carId of deadCarIdsToCleanup) {
+            delete this.deadCarIds[carId];
+            if (this.carPaths) {
+                delete this.carPaths[carId];
+            }
+        }
     }
 };
 
@@ -898,4 +1030,5 @@ function initCircuitBoard() {
     }
 }
 
-initCircuitBoard();
+// Auto-initialization disabled - demo page handles initialization with custom settings
+// initCircuitBoard();

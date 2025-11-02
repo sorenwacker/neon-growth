@@ -100,18 +100,20 @@
             top: 20px;
             left: 20px;
             z-index: 1001;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.1);
             padding: 10px 15px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
-            color: #666;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            color: rgba(255, 255, 255, 0.3);
+            box-shadow: none;
+            transition: all 0.2s ease;
         }
 
         .toggle-ui:hover {
-            background: rgba(255, 255, 255, 1);
+            background: rgba(255, 255, 255, 0.9);
             color: #333;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
         .hidden {
@@ -120,17 +122,17 @@
     </style>
 </head>
 <body>
-    <div class="toggle-ui" id="toggle-ui">Hide UI</div>
+    <div class="toggle-ui" id="toggle-ui">Show UI</div>
 
-    <div class="controls">
+    <div class="controls hidden">
         <h3>Controls</h3>
 
         <div class="control-group">
             <label>
                 Hex Size (px)
-                <span class="value" id="grid-value">100</span>
+                <span class="value" id="grid-value">20</span>
             </label>
-            <input type="range" id="grid" min="50" max="200" value="100" step="10">
+            <input type="range" id="grid" min="5" max="200" value="20" step="5">
         </div>
 
         <div class="control-group">
@@ -144,33 +146,33 @@
         <div class="control-group">
             <label>
                 Trace Lifetime (sec)
-                <span class="value" id="trace-lifetime-value">2.0</span>
+                <span class="value" id="trace-lifetime-value">10.0</span>
             </label>
-            <input type="range" id="trace-lifetime" min="0.5" max="10" value="2.0" step="0.5">
+            <input type="range" id="trace-lifetime" min="0.5" max="10" value="10.0" step="0.5">
         </div>
 
         <div class="control-group">
             <label>
                 Line Width
-                <span class="value" id="width-value">120</span>
+                <span class="value" id="width-value">10</span>
             </label>
-            <input type="range" id="width" min="1" max="150" value="120" step="1">
+            <input type="range" id="width" min="1" max="150" value="10" step="1">
         </div>
 
         <div class="control-group">
             <label>
                 Step Delay (ms)
-                <span class="value" id="delay-value">25</span>
+                <span class="value" id="delay-value">10</span>
             </label>
-            <input type="range" id="delay" min="10" max="500" value="25" step="5">
+            <input type="range" id="delay" min="10" max="500" value="10" step="5">
         </div>
 
         <div class="control-group">
             <label>
                 Spawn Delay (ms)
-                <span class="value" id="spawn-delay-value">500</span>
+                <span class="value" id="spawn-delay-value">0</span>
             </label>
-            <input type="range" id="spawn-delay" min="100" max="2000" value="500" step="100">
+            <input type="range" id="spawn-delay" min="0" max="2000" value="0" step="100">
         </div>
 
         <div class="control-group">
@@ -337,28 +339,28 @@
         }
 
         document.getElementById('preset-sparse').addEventListener('click', function() {
-            applyPresetLayer(100, 5, 120);
+            applyPresetLayer(100, 5, 30);
         });
 
         document.getElementById('preset-dense').addEventListener('click', function() {
-            applyPresetLayer(50, 10, 25);
+            applyPresetLayer(50, 10, 15);
         });
 
         // Toggle UI visibility
         const toggleBtn = document.getElementById('toggle-ui');
         const controlsBox = document.querySelector('.controls');
         const statsBox = document.querySelector('.stats');
-        let uiVisible = true;
+        let uiVisible = false; // Start hidden
 
         toggleBtn.addEventListener('click', function() {
             uiVisible = !uiVisible;
             if (uiVisible) {
                 controlsBox.classList.remove('hidden');
-                statsBox.classList.remove('hidden');
+                if (statsBox) statsBox.classList.remove('hidden');
                 toggleBtn.textContent = 'Hide UI';
             } else {
                 controlsBox.classList.add('hidden');
-                statsBox.classList.add('hidden');
+                if (statsBox) statsBox.classList.add('hidden');
                 toggleBtn.textContent = 'Show UI';
             }
         });
